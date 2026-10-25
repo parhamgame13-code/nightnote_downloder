@@ -1676,17 +1676,74 @@ def download_file(self, job_id: int, quality: str = "best"):
                                 if returncode == 0:
                                     break
 
+                        # فال‌بک ۱: ساندکلاود (scsearch) - وقتی یوتیوب به هر دلیلی
+                        # (403/چالش ضدربات/بدون نتیجه) جواب نداد، همون جست‌وجو رو
+                        # تو ساندکلاود امتحان می‌کنیم - منبع کاملاً متفاوت
                         if returncode != 0:
-                            raise RuntimeError(
-                                f"دانلود صدا از یوتیوب ناموفق بود: {(stderr_text or '')[:200]}"
+                            logger.warning(
+                                f"job {job_id}: جست‌وجوی یوتیوب برای اسپاتیفای ناموفق بود "
+                                f"({(stderr_text or '')[:120]})، تلاش با ساندکلاود..."
+                            )
+                            await status.update(
+                                _status_text(
+                                    "🔁", "یوتیوب جواب نداد، امتحان با ساندکلاود...",
+                                    percent=0, details=_details,
+                                ),
+                                force=True,
+                            )
+                            sc_cmd = [cmd[0], f"scsearch1:{search_query} audio"] + cmd[2:]
+                            returncode, stderr_text = await _run_ytdlp_with_progress(
+                                sc_cmd, status, settings.DOWNLOAD_TIMEOUT, details=_details
                             )
 
-                        mp3_candidates = sorted(
-                            temp_dir.glob("*.mp3"), key=lambda p: p.stat().st_mtime, reverse=True
-                        )
-                        if not mp3_candidates:
-                            raise RuntimeError("فایل صوتی بعد از دانلود پیدا نشد")
-                        file_path = mp3_candidates[0]
+                        # فال‌بک ۲ (آخر): پیش‌نمایش رسمی ۳۰ ثانیه‌ای خود اسپاتیفای -
+                        # mp3 آزاد روی CDN عمومی‌شون؛ صادقانه با پسوند «پیش‌نمایش»
+                        # تو عنوان ارسال می‌شه تا کاربر بدونه فایل کامل نیست
+                        preview_used = False
+                        if returncode != 0 and track.preview_url:
+                            logger.warning(
+                                f"job {job_id}: ساندکلاود هم ناموفق بود "
+                                f"({(stderr_text or '')[:120]})، استفاده از پیش‌نمایش رسمی اسپاتیفای..."
+                            )
+                            await status.update(
+                                _status_text(
+                                    "🔁", "فایل کامل در دسترس نبود؛ پیش‌نمایش رسمی می‌فرستم...",
+                                    percent=0, details=_details,
+                                ),
+                                force=True,
+                            )
+                            try:
+                                prev_path = await _download_generic_file(
+                                    track.preview_url, temp_dir, status=status, details=_details
+                                )
+                            except Exception as e:
+                                logger.warning(f"دانلود پیش‌نمایش اسپاتیفای برای job {job_id} ناموفق بود: {e}")
+                                prev_path = None
+                            if prev_path and prev_path.exists() and prev_path.stat().st_size > 0:
+                                if prev_path.suffix != ".mp3":
+                                    prev_path = prev_path.rename(prev_path.with_suffix(".mp3"))
+                                file_path = prev_path
+                                preview_used = True
+                                download_method = "spotify-preview-30s"
+                                await DownloadJobCRUD.update_status(
+                                    session, job_id, DownloadStatus.DOWNLOADING,
+                                    title=f"{track.title} (پیش‌نمایش ۳۰ ثانیه‌ای)",
+                                    artist=track.artist,
+                                )
+
+                        if returncode != 0 and not preview_used:
+                            raise RuntimeError(
+                                "دانلود صدا از یوتیوب و ساندکلاود ناموفق بود: "
+                                f"{(stderr_text or '')[:200]}"
+                            )
+
+                        if not preview_used:
+                            mp3_candidates = sorted(
+                                temp_dir.glob("*.mp3"), key=lambda p: p.stat().st_mtime, reverse=True
+                            )
+                            if not mp3_candidates:
+                                raise RuntimeError("فایل صوتی بعد از دانلود پیدا نشد")
+                            file_path = mp3_candidates[0]
 
                         try:
                             await tag_audio_file(file_path, track)

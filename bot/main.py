@@ -1159,6 +1159,128 @@ async def userinfo_handler(message: types.Message):
     await message.answer(text)
 
 
+def _resolve_target_user_id(message: types.Message) -> tuple[Optional[int], Optional[str]]:
+    """استخراج کاربرِ هدف از آرگومان دستور یا ریپلای روی پیام فورواردشده -
+    مشترک بین /userinfo و /ban /unban. (target_id, باقی‌مانده‌ی آرگومان‌ها)"""
+    parts = message.text.split(maxsplit=2)
+    if len(parts) >= 2 and parts[1].strip().lstrip("-").isdigit():
+        return int(parts[1].strip()), (parts[2].strip() if len(parts) >= 3 else None)
+    if message.reply_to_message and message.reply_to_message.forward_from:
+        return message.reply_to_message.forward_from.id, (
+            parts[1].strip() if len(parts) >= 2 else None
+        )
+    return None, None
+
+
+@dp.message(Command("ban"))
+async def ban_handler(message: types.Message):
+    """بن کاربر - فقط ادمین. /ban <telegram_id> [دلیل] یا ریپلای روی فورواردشده"""
+    if not _is_admin(message.from_user.id):
+        return
+
+    target_id, reason = _resolve_target_user_id(message)
+    if not target_id:
+        await message.answer(
+            "استفاده: <code>/ban 123456789 دلیل اختیاری</code>\n"
+            "یا ریپلای روی پیامِ فوروارد شده‌ی کاربر."
+        )
+        return
+    if target_id < 0:
+        await message.answer(
+            "این یه شناسه‌ی گروهه — بن مال کاربره. برای محدودکردن گروه‌ها از "
+            "<code>ALLOWED_GROUP_IDS</code> تو .env استفاده کن."
+        )
+        return
+    if target_id in settings.ADMIN_IDS or target_id == message.from_user.id:
+        await message.answer("⛔️ ادمین‌ها (و خودت) قابل بن شدن نیستن.")
+        return
+
+    from db.session import async_session_maker
+    async with async_session_maker() as session:
+        user = await UserCRUD.get_by_id(session, target_id)
+        if not user:
+            await message.answer("این کاربر تو دیتابیس پیدا نشد (هنوز با بات تعامل نکرده).")
+            return
+        await UserCRUD.ban(session, target_id, reason)
+    await message.answer(
+        f"🚫 کاربر <code>{target_id}</code> بن شد."
+        + (f"\nدلیل: {html.escape(reason)}" if reason else "")
+    )
+
+
+@dp.message(Command("unban"))
+async def unban_handler(message: types.Message):
+    """رفع بن - فقط ادمین"""
+    if not _is_admin(message.from_user.id):
+        return
+
+    target_id, _rest = _resolve_target_user_id(message)
+    if not target_id:
+        await message.answer(
+            "استفاده: <code>/unban 123456789</code>\nیا ریپلای روی پیامِ فوروارد شده‌ی کاربر."
+        )
+        return
+
+    from db.session import async_session_maker
+    async with async_session_maker() as session:
+        user = await UserCRUD.get_by_id(session, target_id)
+        if not user:
+            await message.answer("این کاربر تو دیتابیس پیدا نشد.")
+            return
+        await UserCRUD.unban(session, target_id)
+    await message.answer(f"✅ بن کاربر <code>{target_id}</code> برداشته شد.")
+
+
+@dp.message(Command("history"))
+async def history_handler(message: types.Message):
+    """تاریخچه‌ی دانلودهای خود کاربر (۱۰ مورد آخر) - فقط پیوی"""
+    if message.chat.type != "private":
+        await message.answer("📋 تاریخچه رو تو چت خصوصیِ بات ببین.")
+        return
+
+    from datetime import timezone as dt_timezone
+    from db.session import async_session_maker
+    from db.crud import DownloadJobCRUD
+    from db.models import DownloadStatus
+
+    async with async_session_maker() as session:
+        user = await UserCRUD.get_or_create(
+            session,
+            telegram_id=message.from_user.id,
+            username=message.from_user.username,
+            full_name=message.from_user.first_name or "کاربر",
+        )
+        jobs = await DownloadJobCRUD.get_user_history(session, user.id, limit=10)
+        tz_name = user.timezone
+
+    if not jobs:
+        await message.answer("هنوز دانلودی ثبت نکردی. یه لینک بفرست! 🎬")
+        return
+
+    status_icons = {
+        DownloadStatus.DONE: "✅",
+        DownloadStatus.FAILED: "❌",
+        DownloadStatus.CANCELLED: "🚫",
+    }
+    lines = ["<b>📋 آخرین دانلودهای تو</b>\n"]
+    for job in jobs:
+        icon = status_icons.get(job.status, "⏳")
+        title = html.escape((job.title or job.detected_site or "-")[:60])
+        when = ""
+        if job.created_at:
+            dt = job.created_at
+            if tz_name:
+                try:
+                    from zoneinfo import ZoneInfo
+                    dt = dt.replace(tzinfo=dt_timezone.utc).astimezone(ZoneInfo(tz_name))
+                except Exception:
+                    pass  # اسم timezone نامعتبر یا tzdata نبود - همون UTC
+            when = dt.strftime("%Y-%m-%d %H:%M")
+        size = f" • {job.file_size_mb:.0f}MB" if job.file_size_mb else ""
+        lines.append(f"{icon} <b>{title}</b>\n      <i>{when}{size}</i>")
+    await message.answer("\n".join(lines))
+
+
 @dp.message(Command("toggle"))
 async def toggle_handler(message: types.Message):
     """روشن/خاموش کردن کل بات - فقط برای ادمین"""
@@ -1353,6 +1475,23 @@ async def handle_message(message: types.Message):
         # این کلید رو critical می‌کنه - دانلود جدید یعنی چند گیگ فایل موقت
         # بیشتر روی دیسکی که از قبل پر است.
         disk_state = await BotConfigCRUD.get(toggle_session, "disk_space_state") or "ok"
+        # بن: فیلد is_banned از قبل تو مدل بود ولی هیچ‌چک و هیچ دستوری بهش
+        # وصل نبود - الان واقعاً enforce می‌شه
+        banned_row = await UserCRUD.get_by_id(toggle_session, message.from_user.id)
+
+    if banned_row and banned_row.is_banned and not _is_admin(message.from_user.id):
+        await message.reply("⛔️ دسترسی‌ات به این بات محدود شده. اگه فکر می‌کنی اشتباهیه، از پشتیبانی پیگیری کن.")
+        return
+
+    # فیلتر گروه‌های مجاز: ALLOWED_GROUP_IDS خالی = همه‌ی گروه‌ها (رفتار قدیمی)؛
+    # پر = فقط همون‌ها. بدون این، این تنظیم فقط یه رشته‌ی تزئینی تو .env بود.
+    # (فقط مسیر دانلودِ لینک - دستورهای ادمین تو گروه‌ها دست‌نخورده می‌مونن)
+    if (
+        message.chat.type in ("group", "supergroup")
+        and settings.ALLOWED_GROUP_IDS
+        and message.chat.id not in settings.ALLOWED_GROUP_IDS
+    ):
+        return
 
     if not bot_enabled and not _is_admin(message.from_user.id):
         return
@@ -2706,6 +2845,10 @@ async def _prompt_upload_direct_link(message: types.Message, media, file_type: F
     async with async_session_maker() as session:
         bot_enabled = await BotConfigCRUD.get_bool(session, "bot_enabled", True)
         disk_state = await BotConfigCRUD.get(session, "disk_space_state") or "ok"
+        banned_row = await UserCRUD.get_by_id(session, message.from_user.id)
+    if banned_row and banned_row.is_banned and not _is_admin(message.from_user.id):
+        await message.reply("⛔️ دسترسی‌ات به این بات محدود شده.")
+        return
     if not bot_enabled and not _is_admin(message.from_user.id):
         return
     if disk_state == "critical" and not _is_admin(message.from_user.id):
@@ -2927,6 +3070,7 @@ async def set_bot_commands():
         BotCommand(command="start", description="شروع"),
         BotCommand(command="help", description="راهنما"),
         BotCommand(command="settings", description="⚙️ تنظیمات شخصی"),
+        BotCommand(command="history", description="📋 تاریخچه دانلودهای من"),
         BotCommand(command="set_thumb", description="🖼 تنظیم thumbnail دلخواه"),
     ]
     await bot.set_my_commands(commands)
@@ -2938,6 +3082,8 @@ async def set_bot_commands():
             BotCommand(command="stats", description="📊 آمار بات"),
             BotCommand(command="topsites", description="🌐 پرکاربردترین سایت‌ها + دامنه‌های ناشناس"),
             BotCommand(command="userinfo", description="👤 اطلاعات و سایت‌های یه کاربر خاص"),
+            BotCommand(command="ban", description="🚫 بن کاربر"),
+            BotCommand(command="unban", description="✅ رفع بن کاربر"),
             BotCommand(command="broadcast", description="📢 پیام همگانی به کاربرها"),
             BotCommand(command="cancel", description="✖️ لغو حالت انتظار در جریان"),
             BotCommand(command="toggle", description="🔌 روشن/خاموش کردن بات"),

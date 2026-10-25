@@ -73,6 +73,10 @@ class SpotifyTrack:
     album: Optional[str]
     cover_url: Optional[str]
     spotify_url: str
+    # پیش‌نمایش رسمی ۳۰ ثانیه‌ای خود اسپاتیفای (mp3 آزاد روی CDN عمومی‌شون،
+    # همون چیزی که تو پلیر صفحه پخش می‌شه) - به‌عنوان آخرین فال‌بک وقتی هیچ
+    # منبعی برای فایل کامل جواب نداد؛ با پسوند «پیش‌نمایش» صادقانه ارسال می‌شه
+    preview_url: Optional[str] = None
 
 
 def is_track_url(url: str) -> bool:
@@ -107,6 +111,11 @@ async def _fetch_html(url: str) -> Optional[str]:
     return await loop.run_in_executor(None, _fetch_html_sync, url)
 
 
+# پیش‌نمایش رسمی ۳۰ ثانیه‌ای - تو JSON تعبیه‌شده‌ی صفحه هست و چون JSON اسپاتیفای
+# اسلش‌ها رو escape می‌کنه (https:\/\/p.scdn.co\/...)، اول \/ رو عادی می‌کنیم
+_PREVIEW_URL_RE = re.compile(r'https://p\.scdn\.co/mp3-preview/[^"\\\s]+')
+
+
 def _parse_track_meta(html: str, url: str) -> Optional[SpotifyTrack]:
     title = _meta_content(html, prop="og:title")
     if not title:
@@ -126,8 +135,13 @@ def _parse_track_meta(html: str, url: str) -> Optional[SpotifyTrack]:
         if len(parts) >= 2 and parts[1] and parts[1].lower() not in ("song", "single", "ep", "album"):
             album = parts[1]
 
+    # پیش‌نمایش رسمی (اختیاری - ممکنه صفحه نداشته باشه)
+    preview_match = _PREVIEW_URL_RE.search(html.replace("\\/", "/"))
+    preview_url = preview_match.group(0) if preview_match else None
+
     return SpotifyTrack(
         title=title, artist=artist, album=album, cover_url=cover_url, spotify_url=url,
+        preview_url=preview_url,
     )
 
 
