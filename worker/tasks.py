@@ -58,6 +58,7 @@ from db.models import DownloadStatus, FileType
 from utils.link_detector import SiteType
 from utils.error_classifier import classify_download_error
 from utils.url_safety import url_is_safe_to_fetch
+from utils.filename import sanitize_remote_filename, safe_upload_filename
 from utils.cache_key import get_cache_hash
 from utils.apk_downloader import resolve_apkpure_download
 from utils.cloud_downloader import (
@@ -856,17 +857,6 @@ def run_async(coro):
     return loop.run_until_complete(coro)
 
 
-def _sanitize_remote_filename(name: str) -> str:
-    """اسم فایلِ رسیده از Content-Disposition/URL رو به یه اسم امنِ محلی تبدیل
-    می‌کنه. بدون این، یه سرور مخرب می‌تونه filename="../../etc/cron.d/evil"
-    بفرسته و فایل خارج از پوشه‌ی temp نوشته بشه (path traversal) - و ورکر
-    معمولاً با root اجرا می‌شه."""
-    name = (name or "").replace("\\", "/").split("/")[-1]
-    name = name.split("?")[0].split("#")[0].replace("\x00", "").strip()
-    name = name.lstrip(".")  # ".." و "." و فایل‌های مخفی رو هم خنثی می‌کنه
-    return name[:200]
-
-
 async def _download_generic_file(
     url: str, temp_dir: Path, status: Optional["_StatusUpdater"] = None, details: Optional[str] = None,
     extra_headers: Optional[dict] = None,
@@ -925,7 +915,7 @@ async def _download_generic_file(
                     final_path = str(response.url).split("?")[0]
                     candidate = final_path.rsplit("/", 1)[-1]
                     filename = candidate or "downloaded_file"
-                filename = _sanitize_remote_filename(filename) or "downloaded_file"
+                filename = sanitize_remote_filename(filename) or "downloaded_file"
 
                 file_path = temp_dir / filename
                 total = int(response.headers.get("content-length") or 0)
@@ -2479,7 +2469,7 @@ def download_uploaded_file(self, job_id: int, file_id: str):
                 # اسم فایل موقتی رو از عنوان ذخیره‌شده (که تو بات از فایل اصلی
                 # گرفته شده) می‌سازیم؛ اگه نبود، اسم عمومی می‌ذاریم.
                 raw_name = job.title or f"upload_{job_id}"
-                safe_name = re.sub(r'[^A-Za-z0-9._\- ]', '_', raw_name)[:150] or f"upload_{job_id}"
+                safe_name = safe_upload_filename(raw_name) or f"upload_{job_id}"
                 dest_path = temp_dir / safe_name
                 _expected_total_bytes = (job.file_size_mb * 1024 * 1024) if job.file_size_mb else None
 

@@ -3,18 +3,24 @@
 # اسکریپت کامل نصب/چک/تعمیر Downloader Bot روی سرور (جدید یا قدیمی)
 # ایمن برای اجرای چندباره‌ست (idempotent) — هر بخش رو فقط اگه لازم بود انجام می‌ده.
 # باید با روت اجرا بشه: sudo bash setup_downloader_bot.sh
+#
+# مدل استقرار (هماهنگ با downloader-bot.service):
+#   - کد تو INSTALL_DIR (پیش‌فرض /opt/downloader_bot)
+#   - اجرا با کاربر سیستمیِ بدون لاگینِ «downloader» (نه root!)
+#   - دیتای پایدار تو /var/lib/downloader_bot و /var/lib/telegram-bot-api
+#   - .env از .env.example ساخته می‌شه (فقط BOT_TOKEN/ADMIN_IDS رو پر کن)
+#   -migration ها با alembic اعمال می‌شن
 # =============================================================
 
 set -uo pipefail
 
-PROJECT_DIR="/root/downloader_bot"
-VENV_DIR="$PROJECT_DIR/venv"
-SERVICE_FILE="$PROJECT_DIR/downloader-bot.service"
-SERVICE_TARGET="/etc/systemd/system/downloader-bot.service"
+INSTALL_DIR="/opt/downloader_bot"
+SERVICE_USER="downloader"
+VENV_DIR="$INSTALL_DIR/venv"
 
-# --- اطلاعات Local Bot API Server (ذخیره‌شده) ---
-TG_API_ID="17349"
-TG_API_HASH="344583e45741c457fe1862106095a5eb"
+# --- اطلاعات Local Bot API Server (جفت عمومی Telegram Desktop؛ قابل بازنویسی) ---
+TG_API_ID="${TG_API_ID:-17349}"
+TG_API_HASH="${TG_API_HASH:-344583e45741c457fe1862106095a5eb}"
 
 ok()   { echo -e "✅ $1"; }
 warn() { echo -e "⚠️  $1"; }
@@ -25,14 +31,37 @@ echo "=============================================="
 echo " شروع بررسی و راه‌اندازی کامل Downloader Bot"
 echo "=============================================="
 
-# 1) بررسی وجود پروژه
-if [ ! -d "$PROJECT_DIR" ]; then
-    fail "پوشه‌ی پروژه پیدا نشد: $PROJECT_DIR — اول زیپ پروژه رو همون‌جا اکسترکت کن."
+# 0) فقط روت
+if [ "$(id -u)" != "0" ]; then
+    fail "این اسکریپت باید با sudo اجرا شه: sudo bash setup_downloader_bot.sh"
     exit 1
 fi
-ok "پوشه‌ی پروژه پیدا شد: $PROJECT_DIR"
 
-# 2) بررسی/نصب Docker
+# 1) بررسی وجود پروژه
+if [ ! -d "$INSTALL_DIR" ]; then
+    fail "پوشه‌ی پروژه پیدا نشد: $INSTALL_DIR"
+    echo "   پروژه رو همون‌جا بذار، یا اول این متغیر رو بالای اسکریپت عوض کن:"
+    echo "   INSTALL_DIR=\"/مسیر/خودت\""
+    exit 1
+fi
+ok "پوشه‌ی پروژه پیدا شد: $INSTALL_DIR"
+
+# 2) کاربر سیستمیِ بدون لاگین (اجرای سرویس با root یعنی هر باگ = دسترسی کامل سرور)
+if id "$SERVICE_USER" &>/dev/null; then
+    ok "کاربر $SERVICE_USER از قبل وجود داره."
+else
+    info "ساخت کاربر سیستمی $SERVICE_USER ..."
+    useradd -r -s /usr/sbin/nologin "$SERVICE_USER"
+    ok "کاربر $SERVICE_USER ساخته شد."
+fi
+
+# 3) پوشه‌های داده + مالکیت‌ها
+mkdir -p /var/lib/downloader_bot /var/lib/telegram-bot-api "$INSTALL_DIR/logs"
+chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR" /var/lib/downloader_bot
+chown "$SERVICE_USER:$SERVICE_USER" /var/lib/telegram-bot-api
+ok "پوشه‌های داده و مالکیت‌ها درست شد."
+
+# 4) بررسی/نصب Docker
 if ! command -v docker &>/dev/null; then
     info "Docker نصب نیست، در حال نصب..."
     curl -fsSL https://get.docker.com | sh
@@ -43,8 +72,7 @@ else
     systemctl enable --now docker &>/dev/null
 fi
 
-# 3) بررسی/ساخت کانتینر Local Bot API Server
-mkdir -p /var/lib/telegram-bot-api
+# 5) بررسی/ساخت کانتینر Local Bot API Server (برای فایل‌های تا ۲ گیگ)
 if docker ps --format '{{.Names}}' | grep -q '^telegram-bot-api$'; then
     ok "کانتینر telegram-bot-api از قبل در حال اجراست."
 elif docker ps -a --format '{{.Names}}' | grep -q '^telegram-bot-api$'; then
@@ -54,10 +82,11 @@ elif docker ps -a --format '{{.Names}}' | grep -q '^telegram-bot-api$'; then
     ok "کانتینر telegram-bot-api استارت شد."
 else
     info "کانتینر telegram-bot-api وجود نداره، در حال ساخت..."
+    # پورت فقط روی localhost هاست - از اینترنت بیرون بسته‌ست
     docker run -d \
         --name telegram-bot-api \
         --restart always \
-        -p 8081:8081 \
+        -p 127.0.0.1:8081:8081 \
         -v /var/lib/telegram-bot-api:/var/lib/telegram-bot-api \
         -e TELEGRAM_API_ID="$TG_API_ID" \
         -e TELEGRAM_API_HASH="$TG_API_HASH" \
@@ -74,74 +103,91 @@ else
     ok "کانتینر telegram-bot-api پایدار و سالمه."
 fi
 
-# 4) بررسی/ساخت venv
+# 6) .env (اگه نبود از نمونه می‌سازیم و می‌ایستیم تا پرش کنی)
+if [ ! -f "$INSTALL_DIR/.env" ]; then
+    if [ -f "$INSTALL_DIR/.env.example" ]; then
+        cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
+        chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/.env"
+        chmod 600 "$INSTALL_DIR/.env"
+        fail "فایل .env از روی .env.example ساخته شد ولی خالیه!"
+        echo "   الان این فایل رو باز کن و حداقل BOT_TOKEN و ADMIN_IDS رو پر کن:"
+        echo "   nano $INSTALL_DIR/.env"
+        echo "   بعد دوباره این اسکریپت رو اجرا کن."
+        exit 1
+    else
+        fail "نه .env هست نه .env.example — دستی درستش کن."
+        exit 1
+    fi
+else
+    ok "فایل .env موجوده."
+fi
+
+# 7) venv (با کاربر سرویس ساخته/استفاده می‌شه تا مالکیت‌ها خراب نشه)
 if [ ! -f "$VENV_DIR/bin/python3" ]; then
     info "venv پیدا نشد، در حال ساخت..."
-    python3 -m venv "$VENV_DIR"
+    sudo -u "$SERVICE_USER" python3 -m venv "$VENV_DIR"
     ok "venv ساخته شد."
 else
     ok "venv از قبل موجوده."
 fi
 
-# 5) نصب کامل requirements
-if [ -f "$PROJECT_DIR/requirements.txt" ]; then
+# 8) نصب کامل requirements
+if [ -f "$INSTALL_DIR/requirements.txt" ]; then
     info "در حال نصب/به‌روزرسانی requirements.txt ..."
-    "$VENV_DIR/bin/pip" install -q --upgrade pip
-    "$VENV_DIR/bin/pip" install -q -r "$PROJECT_DIR/requirements.txt"
+    sudo -u "$SERVICE_USER" "$VENV_DIR/bin/pip" install -q --upgrade pip
+    sudo -u "$SERVICE_USER" "$VENV_DIR/bin/pip" install -q -r "$INSTALL_DIR/requirements.txt"
     ok "requirements.txt نصب شد."
 else
     warn "requirements.txt پیدا نشد، این مرحله رد شد."
 fi
 
-# 6) اطمینان از async_timeout (باگ شناخته‌شده‌ی redis<8.0)
-if ! "$VENV_DIR/bin/pip" show async_timeout &>/dev/null; then
+# 9) اطمینان از async_timeout (باگ شناخته‌شده‌ی redis<8.0)
+if ! sudo -u "$SERVICE_USER" "$VENV_DIR/bin/pip" show async_timeout &>/dev/null; then
     info "async_timeout نصب نیست، در حال نصب..."
-    "$VENV_DIR/bin/pip" install -q async_timeout
+    sudo -u "$SERVICE_USER" "$VENV_DIR/bin/pip" install -q async_timeout
     ok "async_timeout نصب شد."
 else
     ok "async_timeout از قبل نصبه."
 fi
 
-# 7) اطمینان از وجود اجرایی yt-dlp داخل venv
+# 10) اطمینان از وجود اجرایی yt-dlp داخل venv
 if [ ! -x "$VENV_DIR/bin/yt-dlp" ]; then
     info "yt-dlp executable پیدا نشد، در حال نصب مجدد..."
-    "$VENV_DIR/bin/pip" install -q --force-reinstall yt-dlp
+    sudo -u "$SERVICE_USER" "$VENV_DIR/bin/pip" install -q --force-reinstall yt-dlp
     ok "yt-dlp نصب شد."
 else
     ok "yt-dlp executable موجوده: $VENV_DIR/bin/yt-dlp"
 fi
 
-# 8) اصلاح فایل سرویس (مسیر پروژه، پایتون venv، PATH)
-if [ ! -f "$SERVICE_FILE" ]; then
-    fail "فایل $SERVICE_FILE پیدا نشد — این مرحله رد شد، دستی چک کن."
+# 11) اعمال migration های دیتابیس
+info "اعمال migration ها (alembic upgrade head) ..."
+if sudo -u "$SERVICE_USER" bash -c "cd '$INSTALL_DIR' && '$VENV_DIR/bin/alembic' upgrade head"; then
+    ok "دیتابیس به‌روزه."
 else
-    TMP_SERVICE=$(mktemp)
-    cp "$SERVICE_FILE" "$TMP_SERVICE"
-
-    # مسیر WorkingDirectory و ExecStart رو با venv و PROJECT_DIR هماهنگ کن
-    sed -i \
-        -e "s|^WorkingDirectory=.*|WorkingDirectory=$PROJECT_DIR|" \
-        -e "s|^ExecStart=.*run\.py|ExecStart=$VENV_DIR/bin/python3 $PROJECT_DIR/run.py|" \
-        "$TMP_SERVICE"
-
-    # اضافه کردن PATH که venv/bin اول باشه (برای پیدا شدن yt-dlp توسط subprocessها)
-    if ! grep -q "^Environment=PATH=" "$TMP_SERVICE"; then
-        sed -i "/^\[Service\]/a Environment=PATH=$VENV_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" "$TMP_SERVICE"
-    fi
-
-    if ! diff -q "$TMP_SERVICE" "$SERVICE_TARGET" &>/dev/null; then
-        cp "$TMP_SERVICE" "$SERVICE_FILE"
-        cp "$TMP_SERVICE" "$SERVICE_TARGET"
-        ok "فایل سرویس اصلاح و کپی شد به $SERVICE_TARGET"
-        RELOAD_NEEDED=1
-    else
-        ok "فایل سرویس از قبل درست بود."
-        RELOAD_NEEDED=0
-    fi
-    rm -f "$TMP_SERVICE"
+    warn "alembic ناموفق بود - اگه بار اوله و دیتابیس از قبل با create_all ساخته شده، طبیعیه؛ ادامه بده."
 fi
 
-# 9) enable + (re)start سرویس
+# 12) فایل‌های سرویس: مسیرها با INSTALL_DIR هماهنگ و کپی به systemd
+for UNIT in downloader-bot.service downloader-bot-directlink.service; do
+    SRC="$INSTALL_DIR/$UNIT"
+    TARGET="/etc/systemd/system/$UNIT"
+    if [ ! -f "$SRC" ]; then
+        warn "فایل $SRC پیدا نشد — این واحد رد شد."
+        continue
+    fi
+    TMP_UNIT=$(mktemp)
+    # مسیر پیش‌فرض units (/opt/downloader_bot) با INSTALL_DIR این سرور جایگزین می‌شه
+    sed "s|/opt/downloader_bot|$INSTALL_DIR|g" "$SRC" > "$TMP_UNIT"
+    # اجرا با pythonِ venv (نه system python)
+    sed -i -e "s|ExecStart=/usr/bin/python3|ExecStart=$VENV_DIR/bin/python3|" "$TMP_UNIT"
+    cp "$TMP_UNIT" "$TARGET"
+    rm -f "$TMP_UNIT"
+    ok "$UNIT آماده شد → $TARGET"
+done
+
+# 13) enable + (re)start سرویس اصلی
+# (وب‌سرور لینک مستقیم وقتی DIRECT_LINK_ENABLED فعاله توسط run.py خودش بالا
+#  میاد؛ واحد downloader-bot-directlink فقط برای اجرای جداگانه‌ست - دستی enableش کن)
 systemctl daemon-reload
 systemctl enable downloader-bot &>/dev/null
 
@@ -162,8 +208,8 @@ systemctl status downloader-bot --no-pager -l | head -15
 
 echo ""
 echo "----- آخرین خطوط لاگ -----"
-if [ -f "$PROJECT_DIR/logs/run_bot.log" ]; then
-    tail -n 20 "$PROJECT_DIR/logs/run_bot.log"
+if [ -f "$INSTALL_DIR/logs/run_bot.log" ]; then
+    tail -n 20 "$INSTALL_DIR/logs/run_bot.log"
 fi
 
 if systemctl is-active --quiet downloader-bot; then

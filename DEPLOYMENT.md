@@ -1,5 +1,28 @@
 # 🚀 راهنمای استقرار (Deployment)
 
+> ⚡️ **سرور جدید از صفر؟ مسیر کوتاه:**
+>
+> ```bash
+> # ۱) پروژه رو بذار سر جای خودش و واردش شو
+> sudo mkdir -p /opt && cd /opt
+> sudo git clone <repo-url> downloader_bot   # یا scp زیپ رو اکسترکت کن
+> cd /opt/downloader_bot
+>
+> # ۲) یک دستور، همه‌چیز:
+> sudo bash setup_downloader_bot.sh
+> #    ← کاربر سرویس (غیر-root)، Docker + کانتینر Local Bot API، venv،
+> #      requirements، ساخت .env از روی .env.example، migration ها و
+> #      سرویس systemd رو خودکار انجام می‌ده.
+> #    ← اولین بار وسط کار می‌ایسته که BOT_TOKEN و ADMIN_IDS رو توی
+> #      /opt/downloader_bot/.env پر کنی؛ بعدش دوباره همین دستور رو بزن.
+> ```
+>
+> منبعِ اصلی‌یِ استقرار، فایل‌های خود ریپو هستن:
+> `downloader-bot.service` و `downloader-bot-directlink.service`
+> (کاربر غیر-root + hardening با ProtectSystem) و
+> `setup_downloader_bot.sh` (نصب/تعمیر idempotent).
+> بقیه‌ی این سند، روش‌های دستی و جایگزین‌ان (برای فهم عمیق‌تر یا استقرارهای خاص).
+
 ## 1️⃣ استقرار محلی (Local - Linux)
 
 ### الف) با systemd

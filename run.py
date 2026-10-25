@@ -5,8 +5,10 @@
     ۱) بات تلگرام (bot.main)
     ۲) ورکر Celery (پردازش دانلود/آپلود)
     ۳) Celery beat (زمان‌بند وظایف دوره‌ای مثل پاک‌سازی فایل‌های مؤقت)
+و اگه قابلیت لینک مستقیم تو .env فعاله باشه (DIRECT_LINK_ENABLED=true):
+    ۴) وب‌سرور لینک دانلود مستقیم (webserver.direct_link_server)
 
-با Ctrl+C هر سه با هم و تمیز بسته می‌شن.
+با Ctrl+C همه با هم و تمیز بسته می‌شن.
 
 نکته: این اسکریپت فقط جایگزین «چند تا ترمینال باز کردن» می‌شه؛ Redis
 (و در صورت استفاده از Postgres، دیتابیس) هنوز باید جدا در دسترس باشه
@@ -43,13 +45,32 @@ PROCESSES = [
 ]
 
 
+def _build_process_list():
+    """لیست پردازش‌ها با توجه به .env - وب‌سرور لینک مستقیم فقط وقتی بالا
+    میاد که DIRECT_LINK_ENABLED فعاله (پیش‌فرض خاموش)."""
+    processes = list(PROCESSES)
+    try:
+        from bot.config import settings
+
+        if settings.DIRECT_LINK_ENABLED:
+            processes.append((
+                "directlink",
+                [sys.executable, "-m", "webserver.direct_link_server"],
+            ))
+    except Exception as e:
+        # تنظیمات لود نشد (مثلاً BOT_TOKEN خالیه) - بات به‌هرحال با خطای
+        # واضح کرش می‌کنه و run.py دلیلش رو از لاگ نشون می‌ده؛ این‌جا نرم رد شو
+        print(f"[run.py] خوندن تنظیمات برای چک DIRECT_LINK_ENABLED ناموفق بود: {e}")
+    return processes
+
+
 def main() -> int:
     procs = []
     log_files = []
     run_logs_dir = ROOT / "logs"
     run_logs_dir.mkdir(exist_ok=True)
     try:
-        for name, cmd in PROCESSES:
+        for name, cmd in _build_process_list():
             print(f"[run.py] در حال اجرای {name}: {' '.join(cmd)}")
             # خروجی/ارور هر پردازش رو جدا توی logs/run_<name>.log هم می‌نویسیم،
             # چون وقتی هر سه با هم توی یک ترمینال چاپ می‌کنن، لاگ کرش یکی‌شون

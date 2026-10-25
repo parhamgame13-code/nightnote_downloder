@@ -6,9 +6,10 @@ TEMP_DIR و DIRECT_LINK_DIR روی دو پارتیشن/دیسک جدا هستن)
 توکن‌دار زیر DIRECT_LINK_DIR می‌ذاره تا وب‌سرور جدا (webserver/direct_link_server.py)
 بتونه سروش کنه. توکن تصادفی و غیرقابل‌حدسه، پس صرفِ داشتنِ لینک برای دسترسی کافیه
 (هیچ auth دیگه‌ای لازم نیست) - مثل خیلی از سرویس‌های اشتراک فایل.
+
+پاک‌سازی اسم‌ها تو utils/filename.py هست (مشترک با بقیه‌ی سناریوهای اسم فایل).
 """
 import os
-import re
 import shutil
 import secrets
 from pathlib import Path
@@ -18,30 +19,7 @@ from urllib.parse import quote
 from loguru import logger
 
 from bot.config import settings
-
-# فقط حروف/عدد انگلیسی، نقطه، خط‌تیره، زیرخط و فاصله مجازن
-_ASCII_CLEAN_RE = re.compile(r'[^A-Za-z0-9._\- ]')
-
-
-def sanitize_ascii_filename(raw: str) -> Optional[str]:
-    """
-    اسم دلخواهی که کاربر برای لینک مستقیم فرستاده رو پاک‌سازی می‌کنه: فقط
-    حروف/عدد انگلیسی، فاصله، نقطه، خط‌تیره و زیرخط مجازن (بدون فارسی/عربی و
-    بدون کاراکتر خاص که تو URL یا مسیر فایل مشکل‌ساز بشه).
-
-    اگه بعد از پاک‌سازی چیزی قابل‌استفاده نمونه (مثلاً کاربر فقط فارسی
-    فرستاده بود)، None برمی‌گردونه.
-    """
-    raw = (raw or "").strip()
-    if not raw:
-        return None
-    cleaned = _ASCII_CLEAN_RE.sub("", raw).strip()
-    cleaned = re.sub(r"\s+", "_", cleaned)
-    cleaned = re.sub(r"_+", "_", cleaned)
-    cleaned = cleaned.strip("._-")
-    if not cleaned:
-        return None
-    return cleaned[:100]
+from utils.filename import sanitize_ascii_filename  # noqa: F401  (re-export برای سازگاری)
 
 
 def _safe_filename(name: str) -> str:
