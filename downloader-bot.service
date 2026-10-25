@@ -1,0 +1,43 @@
+# سرویس اصلی: بات + ورکر Celery + beat (همه با run.py)
+#
+# ⚠️ یک‌بار قبل از فعال‌سازی لازمه (اجرای ربات با root یعنی هر path traversal
+# یا اسکرپر خراب، دسترسی کامل root داره):
+#
+#   sudo useradd -r -s /usr/sbin/nologin downloader
+#   sudo mkdir -p /opt/downloader_bot /var/lib/downloader_bot /var/lib/telegram-bot-api
+#   sudo chown -R downloader:downloader /opt/downloader_bot /var/lib/downloader_bot
+#   sudo chown downloader:downloader /var/lib/telegram-bot-api
+#
+# مسیرها رو با نصب خودت تطبیق بده:
+#   - INSTALL_DIR: محل کد پروژه (این‌جا /opt/downloader_bot)
+#   - اگر venv داری، ExecStart رو به venv/bin/python تغییر بده
+#   - ReadWritePaths باید همه‌ی مسیرهایی باشه که پروژه توش می‌نویسه:
+#       دیتابیس/لاگ‌ها (داخل INSTALL_DIR)، DIRECT_LINK_DIR،
+#       BOT_API_LOCAL_FILES_DIR و TEMP_DIR (اگه جایی غیر از /tmp ست شده -
+#       /tmp با PrivateTmp خودش جدا و قابل‌نوسته)
+
+[Unit]
+Description=Downloader Bot (Telegram bot + Celery worker + beat)
+After=network-online.target redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=downloader
+Group=downloader
+WorkingDirectory=/opt/downloader_bot
+ExecStart=/usr/bin/python3 /opt/downloader_bot/run.py
+Restart=always
+RestartSec=5
+
+# ---------- hardening ----------
+# جلوی privilege escalation و نوشتن در کل فایل‌سیستم رو می‌بنده
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# تنها مسیرهایی که سرویس واقعاً باید توشون بنویسه:
+ReadWritePaths=/opt/downloader_bot /var/lib/downloader_bot /var/lib/telegram-bot-api
+
+[Install]
+WantedBy=multi-user.target

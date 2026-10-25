@@ -1,0 +1,34 @@
+# سرویس وب‌سرور لینک دانلود مستقیم (webserver/direct_link_server.py)
+#
+# ⚠️ یک‌بار قبل از فعال‌سازی لازمه (همون کاربر بدون لاگین که سرویس اصلی):
+#
+#   sudo useradd -r -s /usr/sbin/nologin downloader
+#   sudo mkdir -p /opt/downloader_bot /var/lib/downloader_bot
+#   sudo chown -R downloader:downloader /opt/downloader_bot /var/lib/downloader_bot
+#
+# این سرویس فقط HTTP ساده حرف می‌زنه - پشت nginx/caddy با TLS بذارینش.
+# (fputs روی دیسک: فقط DIRECT_LINK_DIR - برای همین ReadWritePaths همینه)
+
+[Unit]
+Description=Downloader Bot - Direct Link File Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=downloader
+Group=downloader
+WorkingDirectory=/opt/downloader_bot
+ExecStart=/usr/bin/python3 -m webserver.direct_link_server
+Restart=always
+RestartSec=5
+
+# ---------- hardening ----------
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/downloader_bot
+
+[Install]
+WantedBy=multi-user.target

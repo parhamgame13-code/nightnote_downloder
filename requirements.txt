@@ -1,0 +1,40 @@
+# تلگرام
+aiogram>=3.30.0
+
+# دانلود
+yt-dlp==2026.7.4
+httpx==0.28.1
+mega.py==1.0.8  # برای دانلود MEGA (رمزنگاری end-to-end رو خودش هندل می‌کنه)
+aiofiles==25.1.0
+curl_cffi==0.15.0  # برای دانلود MEGA و گرفتن متادیتای اسپاتیفای (TLS fingerprint مرورگر واقعی)
+
+# صف کار
+celery[redis]==5.6.3
+# نکته: redis-py 8.0 داره RESP3 رو پیش‌فرض می‌کنه (breaking change نسبت به 7.x)
+# و هنوز مشخص نیست celery[redis] باهاش کاملاً سازگاره؛ برای همین سقفش رو زیر 8
+# نگه داشتیم و فقط تا آخرین نسخه‌ی امنِ 7.x (7.4.1) بالا بردیم.
+redis>=6.2.0,<8.0
+kombu==5.6.2
+
+# دیتابیس
+sqlalchemy[asyncio]==2.0.51
+alembic==1.18.5
+aiosqlite==0.22.1
+asyncpg==0.31.0
+
+# تنظیمات
+pydantic==2.13.4
+pydantic-settings==2.14.2
+python-dotenv==1.2.2
+
+# لاگینگ
+loguru==0.7.3
+
+# متادیتا
+mutagen==1.48.1
+
+# QR کد لینک دانلود مستقیم
+qrcode[pil]==7.4.2
+
+# دیگر
+cryptography==49.0.0

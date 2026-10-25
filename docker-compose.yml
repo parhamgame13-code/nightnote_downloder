@@ -1,0 +1,149 @@
+version: '3.8'
+
+services:
+  # Local Bot API Server - سرورِ رسمیِ متن‌بازِ Bot API تلگرام، سلف‌هاست.
+  # بدون این، سقف آپلود/دانلود بات ۵۰ مگابایته؛ با این، تا ۲ گیگ و فایل‌ها
+  # محلی روی همین سرور می‌مونن (سرعت + پاک‌سازی دستی‌مون).
+  #
+  # api_id/api_hash: جفتِ جاافتاده‌ی Telegram Desktop که تو سورسِ بازِ خود
+  # تلگرام منتشر شده و همه‌جای اینترنت پخشه (پیش‌فرض پایین هاردکده و از
+  # .env قابل بازنویسی). اگه خواستی جفت اختصاصی داشته باشی، از
+  # my.telegram.org رایگان می‌شه گرفت - با جفت اختصاصی ریسک محدودیت/بن کمتره.
+  #
+  # اگه از قبل یه کانتینر مشترک telegram-bot-api روی همین سرور داری، این
+  # سرویس رو کامنت کن (پورت 8081 تداخل می‌کنه) - بات‌ها همون مشترک رو از
+  # طریق localhost:8081 می‌بینن و LOCAL_BOT_API_URL رو هم بهش نده.
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    container_name: telegram-bot-api
+    restart: always
+    environment:
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID:-17349}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-344583e45741c457fe1862106095a5eb}
+      TELEGRAM_LOCAL: 1
+    ports:
+      # فقط روی localhost هاست - بات‌های دیگه‌ی همون سرور هم می‌تونن از
+      # localhost:8081 استفاده کنن، ولی از اینترنت بیرون بسته‌ست
+      - "127.0.0.1:8081:8081"
+    volumes:
+      - bot_api_data:/var/lib/telegram-bot-api
+
+  redis:
+    image: redis:7-alpine
+    container_name: downloader_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: downloader_postgres
+    environment:
+      POSTGRES_USER: downloader
+      POSTGRES_PASSWORD: secure_password_123
+      POSTGRES_DB: downloader_bot
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U downloader"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  bot:
+    build: .
+    container_name: downloader_bot_app
+    restart: always
+    command: python -m bot.main
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://downloader:secure_password_123@postgres/downloader_bot
+      LOCAL_BOT_API_URL: http://telegram-bot-api:8081
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      # ایمیج telegram-bot-api healthcheck آماده نداره؛ «شروع‌شده» کافیه -
+      # bot با restart:always تا آماده شدن سرور چند بار ری‌استارت می‌شه (طبیعیه)
+      telegram-bot-api:
+        condition: service_started
+    volumes:
+      - temp_data:/tmp/downloader_bot
+      - direct_links_data:/var/lib/downloader_bot/direct_links
+
+  worker:
+    build: .
+    container_name: downloader_worker
+    restart: always
+    # پول solo چون yt-dlp/ffmpeg خودشون CPU-heavy هستن - همون تنظیمی که رو
+    # systemd هم استفاده می‌شد. برای هم‌زمانی واقعی، چندتا replica از این
+    # سرویس رو با «docker compose up -d --scale worker=3» بالا بیار.
+    command: celery -A worker.celery_app worker --loglevel=info -Q download,upload,default --pool=solo
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://downloader:secure_password_123@postgres/downloader_bot
+      LOCAL_BOT_API_URL: http://telegram-bot-api:8081
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      telegram-bot-api:
+        condition: service_started
+    volumes:
+      - temp_data:/tmp/downloader_bot
+      - direct_links_data:/var/lib/downloader_bot/direct_links
+      # ورکر همون‌هایی که Local Bot API آپلود/دانلود کرده رو کپی می‌کنه و
+      # نسخه‌ی تکراریش رو پاک می‌کنه (cleanup_temp_files) - پس باید همون
+      # ولوم سرور محلی رو ببینه، وگرنه دیسک دوبله می‌مونه
+      - bot_api_data:/var/lib/telegram-bot-api
+
+  beat:
+    build: .
+    container_name: downloader_beat
+    restart: always
+    command: celery -A worker.celery_app beat --loglevel=info
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://downloader:secure_password_123@postgres/downloader_bot
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+volumes:
+  redis_data:
+  postgres_data:
+  temp_data:
+  direct_links_data:
+  bot_api_data:
+
+networks:
+  default:
+    name: downloader_network
+
+# =============================================================
+# نمونه‌ی .env لازم (کنار همین فایل بساز - یا از .env.example کپی کن):
+#
+# BOT_TOKEN=123456:ABC-your-bot-token
+# ADMIN_IDS=123456789
+# TELEGRAM_API_ID=17349            # پیش‌فرض عمومی داره؛ جایگزین با my.telegram.org بهتره
+# TELEGRAM_API_HASH=344583e45741c457fe1862106095a5eb
+#
+# اجرا:
+#   docker compose up -d --build
+# =============================================================

@@ -1,0 +1,44 @@
+# ===== محیط مجازی =====
+venv/
+.venv/
+env/
+
+# ===== پایتون =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ===== اسرار و محیط (هرگز کامیت نشن!) =====
+.env
+.env.*
+!.env.example
+
+# کوکی‌های لاگین (اینستاگرام/یوتیوب) - خیلی حساس، معادل پسورد اکانته
+cookies/
+*.txt.bak
+instagram_cookies*
+youtube_cookies*
+
+# ===== دیتابیس محلی =====
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+bot.db*
+
+# ===== لاگ‌ها =====
+logs/
+*.log
+
+# ===== داده‌های موقت/دانلودی (اگه روزی داخل ریپو ساخته شدن) =====
+downloads/
+tmp/
+
+# ===== سیستم‌عامل/ادیتور =====
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
