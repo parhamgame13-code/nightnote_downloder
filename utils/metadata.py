@@ -195,10 +195,8 @@ class MetadataExtractor:
         try:
             from mutagen.easyid3 import EasyID3
             from mutagen.flac import FLAC
-            from mutagen.oggflac import OggFLAC
             from mutagen.oggvorbis import OggVorbis
             from mutagen.oggopus import OggOpus
-            from mutagen.oggtheora import OggTheora
             
             path = Path(file_path)
             
@@ -242,18 +240,18 @@ class MetadataExtractor:
             return None
     
     @staticmethod
-    def _parse_id3_tags(audio: 'EasyID3', path: Path) -> MediaMetadata:
-        """تجزیه تگ‌های ID3"""
+    def _parse_id3_tags(audio, path: Path) -> MediaMetadata:
+        """تجزیه تگ‌های ID3 (شیء EasyID3 - تایپش فقط داخل extract_from_file ایمپورت می‌شه)"""
         return MediaMetadata(
             title=str(audio.get('title', [''])[0] or path.stem),
             artist=str(audio.get('artist', ['هنرمند نامشخص'])[0]),
             album=str(audio.get('album', [''])[0]),
             genre=str(audio.get('genre', [''])[0]),
         )
-    
+
     @staticmethod
-    def _parse_flac_tags(audio: 'FLAC', path: Path) -> MediaMetadata:
-        """تجزیه تگ‌های FLAC"""
+    def _parse_flac_tags(audio, path: Path) -> MediaMetadata:
+        """تجزیه تگ‌های FLAC (شیء mutagen FLAC)"""
         return MediaMetadata(
             title=str(audio.get('title', [path.stem])[0]),
             artist=str(audio.get('artist', ['هنرمند نامشخص'])[0]),
@@ -261,10 +259,10 @@ class MetadataExtractor:
             genre=str(audio.get('genre', [''])[0]),
             duration=int(audio.info.length) if audio.info.length else None,
         )
-    
+
     @staticmethod
-    def _parse_ogg_tags(audio: 'OggVorbis', path: Path) -> MediaMetadata:
-        """تجزیه تگ‌های OGG Vorbis"""
+    def _parse_ogg_tags(audio, path: Path) -> MediaMetadata:
+        """تجزیه تگ‌های OGG Vorbis (شیء mutagen OggVorbis/OggOpus)"""
         return MediaMetadata(
             title=str(audio.get('title', [path.stem])[0]),
             artist=str(audio.get('artist', ['هنرمند نامشخص'])[0]),

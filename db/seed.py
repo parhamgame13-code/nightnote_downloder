@@ -1,4 +1,3 @@
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from db.models import BotConfig
 from db.session import async_session_maker

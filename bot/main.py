@@ -6,7 +6,6 @@ import asyncio
 import html
 import json
 import re
-import logging
 from typing import Optional
 from urllib.parse import urlparse
 from loguru import logger
@@ -617,7 +616,8 @@ async def on_bot_membership_changed(event: types.ChatMemberUpdated):
 async def start_handler(message: types.Message):
     from db.session import async_session_maker
     async with async_session_maker() as session:
-        user = await UserCRUD.get_or_create(
+        # فقط برای اثر جانبی: رکورد کاربر ساخته/به‌روز می‌شه (اگه نباشه)
+        await UserCRUD.get_or_create(
             session,
             telegram_id=message.from_user.id,
             username=message.from_user.username,
@@ -1116,7 +1116,7 @@ async def userinfo_handler(message: types.Message):
         return
 
     from db.session import async_session_maker
-    from db.crud import DownloadJobCRUD, DownloadJobCRUD as _JobCRUD
+    from db.crud import DownloadJobCRUD
 
     target_id = None
     args = message.text.split(maxsplit=1)
@@ -1344,7 +1344,7 @@ async def emoji_delete_callback(callback: CallbackQuery):
 async def handle_message(message: types.Message):
     from db.session import async_session_maker
     from db.crud import DownloadJobCRUD, BotConfigCRUD
-    from db.models import FileType, DownloadStatus
+    from db.models import FileType
 
     # بات برای همه بازه، مگه این‌که ادمین با /toggle خاموش کرده باشه
     async with async_session_maker() as toggle_session:
@@ -2198,7 +2198,7 @@ async def retry_download_callback(callback: CallbackQuery):
         InlineKeyboardButton(text="❌ لغو", callback_data=f"cancel_dl:{job_id}", style="danger")
     ]])
     await callback.message.edit_text(
-        f"🔄 درحال پردازش دوباره...\n\n⏳ لطفا صبر کنید...",
+        "🔄 درحال پردازش دوباره...\n\n⏳ لطفا صبر کنید...",
         reply_markup=cancel_keyboard
     )
 

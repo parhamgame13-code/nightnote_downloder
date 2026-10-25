@@ -2,10 +2,14 @@
 متن‌های قابل‌ویرایش بات - مرکزی، هم برای bot/main.py و هم worker/tasks.py
 (چون این دوتا پردازش پایتونِ جدا و مستقلن، این منطق نمی‌تونه فقط تو
 main.py بمونه - وگرنه پیام‌هایی که worker مستقیم می‌فرسته (شکست/موفقیت)
-هیچ‌وقت از تنظیمات ادمین و کاتالوگ ایموجی پرمیوم استفاده نمی‌کردن.
+هیچ‌وقت از تنظیمات ادمین استفاده نمی‌کرد.
+
+ایموجی‌های پریمیوم: سیستم قدیمی placeholder دستی ({e:name} + کاتالوگ تو
+دیتابیس که هیچ UI مدیریت‌ای هم نداشت) حذف شد. از این به بعد نگاشت خودکار
+«کاراکتر ← ایموجی پریمیوم» با پنل /emoji (utils/premium_emoji.py) انجام
+می‌شه و میدلور سطح session روی *همه‌ی* پیام‌های خروجی اعمالش می‌کنه -
+چه متن‌های این‌جا، چه هر جای دیگه‌ی ربات.
 """
-import re
-import json
 
 EDITABLE_TEXTS = {
     "text_start": {
@@ -94,35 +98,6 @@ EDITABLE_TEXTS = {
     },
 }
 
-_EMOJI_PLACEHOLDER_RE = re.compile(r'\{e:([a-zA-Z0-9_]+)\}')
-
-
-async def _get_emoji_catalog(session) -> dict:
-    from db.crud import BotConfigCRUD
-    raw = await BotConfigCRUD.get(session, "custom_emoji_catalog")
-    try:
-        return json.loads(raw) if raw else {}
-    except Exception:
-        return {}
-
-
-async def apply_emoji_catalog(session, text: str) -> str:
-    """جای placeholderهای {e:name} رو با تگ <tg-emoji> واقعی عوض می‌کنه"""
-    if "{e:" not in text:
-        return text
-    catalog = await _get_emoji_catalog(session)
-    if not catalog:
-        return text
-
-    def _sub(m):
-        emoji_id = catalog.get(m.group(1))
-        if not emoji_id:
-            return m.group(0)  # اسمی که پیدا نشد رو دست‌نخورده بذار
-        return f'<tg-emoji emoji-id="{emoji_id}">⭐️</tg-emoji>'
-
-    return _EMOJI_PLACEHOLDER_RE.sub(_sub, text)
-
-
 async def get_text(session, key: str, **fmt) -> str:
     """متن رو از تنظیمات دیتابیس بخون، اگه ادمین عوضش نکرده بود از پیش‌فرض کد استفاده کن"""
     from db.crud import BotConfigCRUD
@@ -134,4 +109,4 @@ async def get_text(session, key: str, **fmt) -> str:
         except Exception:
             # اگه ادمین placeholder رو اشتباه نوشته باشه، حداقل بات کرش نکنه
             pass
-    return await apply_emoji_catalog(session, template)
+    return template

@@ -455,6 +455,9 @@ class DownloadJobCRUD:
         آمار روزانه (DownloadStats) و کش فایل‌ها دست‌نخورده می‌مونن؛ پوشه‌های
         لینک مستقیمِ یتیم رو sweep مبتنی بر mtime در cleanup_temp_files پاک
         می‌کنه پس لازم نیست اینجا سراغ فایل‌سیستم بریم."""
+        # دفاعی: صفر/منفی یعنی غیرفعال - وگرنه cutoff=همین‌حالا یعنی حذفِ همه!
+        if older_than_days <= 0:
+            return 0
         cutoff = datetime.utcnow() - timedelta(days=older_than_days)
         stmt = delete(DownloadJob).where(DownloadJob.created_at < cutoff)
         result = await session.execute(stmt)

@@ -4,7 +4,7 @@
 import re
 from enum import Enum
 from typing import Optional
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse
 
 
 class SiteType(str, Enum):

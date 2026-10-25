@@ -11,11 +11,11 @@ import shutil
 import asyncio
 import contextlib
 import subprocess
-import hashlib
+from collections import namedtuple
 from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
-from typing import Optional, Dict, Any
+from typing import Optional
 
 import httpx
 from loguru import logger
@@ -58,7 +58,6 @@ from db.models import DownloadStatus, FileType
 from utils.link_detector import SiteType
 from utils.error_classifier import classify_download_error
 from utils.url_safety import url_is_safe_to_fetch
-from utils.metadata import MetadataExtractor, format_metadata_message
 from utils.cache_key import get_cache_hash
 from utils.apk_downloader import resolve_apkpure_download
 from utils.cloud_downloader import (
@@ -511,8 +510,6 @@ def _progress_bar(percent: float, length: int = 14) -> str:
     filled = int(length * percent / 100)
     return f"{'▓' * filled}{'░' * (length - filled)}  {percent:5.1f}%"
 
-
-from collections import namedtuple
 
 # خروجی _status_text: هم نسخه‌ی HTML قدیمی (فال‌بک) و هم نسخه‌ی Rich Message
 # (Bot API 10.1 - core.telegram.org/bots/api#rich-messages، پشتیبانی شده در
@@ -3421,6 +3418,65 @@ def cleanup_old_jobs():
 
 
 @celery_app.task(queue='default')
+def daily_error_digest():
+    """گزارش روزانه‌ی خطاهای سرور برای ادمین‌ها (beat، هر روز ۹:۰۰ UTC).
+
+    فایل errors_دیروز.log (که loguru با سطح ERROR پر می‌کنه) رو می‌خونه،
+    خطاها رو بر اساس «ماژول:خط + شروع پیام» گروه‌بندی می‌کنه و ۵ الگوی
+    پربسامد رو با شمارش می‌فرسته.
+
+    - روزِ بی‌خطا پیامی نمی‌فرسته (بدون اسپم) - یعنی سکوت = همه‌چیز سالمه
+    - تو حالت Docker، پوشه‌ی logs بین bot و worker مشترکه (ولوم logs_data)
+      تا خطاهای بات هم دیده بشن"""
+    from collections import Counter
+
+    yesterday = (datetime.utcnow().date() - timedelta(days=1)).isoformat()
+    log_path = Path("logs") / f"errors_{yesterday}.log"
+    if not log_path.exists():
+        return
+
+    groups: Counter = Counter()
+    total = 0
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                # فرمت loguru: time | LEVEL | name:line | message
+                # خطوط ادامه‌ی backtrace شکل استاندارد ندارن و رد می‌شن
+                parts = [p.strip() for p in line.split("|", 3)]
+                if len(parts) != 4 or parts[1] not in ("ERROR", "CRITICAL"):
+                    continue
+                total += 1
+                key = f"{parts[2]} — {parts[3][:100]}".replace("\n", " ")
+                groups[key] += 1
+    except Exception as e:
+        logger.warning(f"خوندن فایل خطاهای دیروز ({log_path}) ناموفق بود: {e}")
+        return
+
+    if total == 0:
+        return
+
+    lines = [
+        f"🛠 <b>گزارش خطاهای {yesterday}</b>",
+        f"مجموع: <b>{total}</b> خطا",
+        "",
+    ]
+    for key, count in groups.most_common(5):
+        lines.append(f"• {count}× <code>{html.escape(key)}</code>")
+    if len(groups) > 5:
+        lines.append(f"… و {len(groups) - 5} الگوی دیگر")
+    digest_text = "\n".join(lines)
+
+    async def _send():
+        for admin_id in settings.ADMIN_IDS:
+            try:
+                await bot.send_message(admin_id, digest_text)
+            except Exception as e:
+                logger.warning(f"ارسال گزارش خطای روزانه به ادمین {admin_id} ناموفق بود: {e}")
+
+    run_async(_send())
+
+
+@celery_app.task(queue='default')
 def update_ytdlp():
     """
     آپدیت خودکار ابزارهای دانلود روی خودِ سرور (بدون Docker).
@@ -3450,7 +3506,6 @@ def update_ytdlp():
     تا اسپم نشن.
     """
     import subprocess as sp
-    import sys
 
     if not settings.AUTO_UPDATE_YTDLP:
         logger.info("AUTO_UPDATE_YTDLP خاموش است - آپدیت خودکار ابزارها رد شد")

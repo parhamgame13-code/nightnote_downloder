@@ -1,0 +1,18 @@
+# پیکربندی ruff — فقط خطاهای واقعی، نه سبک‌بازی‌ها
+# اجرا: python -m ruff check .
+# (تو CI هم همین دو قدم pytest + ruff اجرا می‌شه)
+
+line-length = 120
+target-version = "py311"
+exclude = ["venv", ".venv", "logs"]
+
+[lint]
+# E4/E7/E9 = خطاهای پایتون، F = pyflakes (ایمپورت بلااستفاده، اسم تعریف‌نشده و ...)
+# سبک‌بازی‌ها (import sorting، آپدیت annotation به PEP604 و ...) عمداً خاموش‌ان
+# تا diff ها تمیز بمونن؛ کدبیس آگاهانه از datetime.utcnow (naive-UTC) و
+# except های broad با لاگ استفاده می‌کنه - پس DTZ/BLE هم select نمی‌شن.
+select = ["E4", "E7", "E9", "F"]
+
+[lint.per-file-ignores]
+# الگوی استاندارد env.py در Alembic: sys.path قبل از import مدل‌ها تنظیم می‌شه
+"migrations/env.py" = ["E402"]

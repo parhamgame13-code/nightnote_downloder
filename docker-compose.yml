@@ -81,6 +81,9 @@ services:
     volumes:
       - temp_data:/tmp/downloader_bot
       - direct_links_data:/var/lib/downloader_bot/direct_links
+      # لاگ‌های bot و worker روی یه ولوم مشترک - تسک daily_error_digest
+      # (که تو worker اجرا می‌شه) باید خطاهای بات رو هم ببینه
+      - logs_data:/app/logs
 
   worker:
     build: .
@@ -109,6 +112,7 @@ services:
       # نسخه‌ی تکراریش رو پاک می‌کنه (cleanup_temp_files) - پس باید همون
       # ولوم سرور محلی رو ببینه، وگرنه دیسک دوبله می‌مونه
       - bot_api_data:/var/lib/telegram-bot-api
+      - logs_data:/app/logs
 
   beat:
     build: .
@@ -131,6 +135,7 @@ volumes:
   temp_data:
   direct_links_data:
   bot_api_data:
+  logs_data:
 
 networks:
   default:

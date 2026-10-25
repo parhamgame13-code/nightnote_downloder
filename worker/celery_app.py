@@ -4,6 +4,7 @@
 from urllib.parse import urlsplit, urlunsplit
 
 from celery import Celery
+from celery.schedules import crontab
 from kombu import Queue, Exchange
 
 from bot.config import settings
@@ -71,6 +72,11 @@ celery_app.conf.update(
         'cleanup-old-jobs-daily': {
             'task': 'worker.tasks.cleanup_old_jobs',
             'schedule': 86400.0,  # روزانه - حذف تاریخچه‌ی قدیمی (JOB_RETENTION_DAYS)
+        },
+        'daily-error-digest': {
+            'task': 'worker.tasks.daily_error_digest',
+            # ۹:۰۰ UTC = ۱۲:۳۰ تهران - خطاهای «دیروز» رو گزارش می‌کنه (روزِ کامل)
+            'schedule': crontab(hour=9, minute=0),
         },
         'update-ytdlp-every-6h': {
             'task': 'worker.tasks.update_ytdlp',
