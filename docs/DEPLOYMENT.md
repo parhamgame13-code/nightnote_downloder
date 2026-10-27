@@ -1,26 +1,31 @@
 # 🚀 راهنمای استقرار (Deployment)
 
-> ⚡️ **سرور جدید از صفر؟ مسیر کوتاه:**
+> ⚡️ **سرور جدید از صفر؟ مسیر کوتاه (تک‌دستور):**
 >
 > ```bash
-> # ۱) پروژه رو بذار سر جای خودش و واردش شو
-> sudo mkdir -p /opt && cd /opt
-> sudo git clone <repo-url> downloader_bot   # یا scp زیپ رو اکسترکت کن
-> cd /opt/downloader_bot
->
-> # ۲) یک دستور، همه‌چیز:
-> sudo bash setup_downloader_bot.sh
-> #    ← کاربر سرویس (غیر-root)، Docker + کانتینر Local Bot API، venv،
-> #      requirements، ساخت .env از روی .env.example، migration ها و
-> #      سرویس systemd رو خودکار انجام می‌ده.
-> #    ← اولین بار وسط کار می‌ایسته که BOT_TOKEN و ADMIN_IDS رو توی
-> #      /opt/downloader_bot/.env پر کنی؛ بعدش دوباره همین دستور رو بزن.
+> # فقط همین یک خط — خودش پروژه رو دانلود، پیش‌نیازها رو نصب،
+> # .env رو تعاملی پر و همه‌چیز رو راه‌اندازی می‌کنه:
+> curl -fsSL https://raw.githubusercontent.com/USER/REPO/main/deploy/deploy.sh | sudo bash -s -- https://github.com/USER/REPO.git
 > ```
 >
-> منبعِ اصلی‌یِ استقرار، فایل‌های خود ریپو هستن:
-> `downloader-bot.service` و `downloader-bot-directlink.service`
-> (کاربر غیر-root + hardening با ProtectSystem) و
-> `setup_downloader_bot.sh` (نصب/تعمیر idempotent).
+> یا اگه پروژه از قبل رو سروره:
+> ```bash
+> cd /opt/downloader_bot
+> sudo bash deploy/deploy.sh https://github.com/USER/REPO.git
+> ```
+>
+> **یا فقط نصب (پروژه از قبل هست):**
+> ```bash
+> sudo bash deploy/setup_downloader_bot.sh
+> ```
+> ← کاربر سرویس (غیر-root)، Docker + کانتینر Local Bot API، venv،
+> requirements، migration ها و سرویس systemd رو خودکار انجام می‌ده.
+>
+> منبعِ اصلی‌یِ استقرار:
+> `deploy/setup_downloader_bot.sh` (نصب/تعمیر idempotent)،
+> `deploy/deploy.sh` (دانلود + تعاملی)، و
+> `deploy/systemd/downloader-bot.service` + `downloader-bot-directlink.service`
+> (کاربر غیر-root + hardening با ProtectSystem).
 > بقیه‌ی این سند، روش‌های دستی و جایگزین‌ان (برای فهم عمیق‌تر یا استقرارهای خاص).
 
 ## 1️⃣ استقرار محلی (Local - Linux)

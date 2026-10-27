@@ -2,6 +2,53 @@
 
 ربات تلگرامی پیشرفته برای دانلود محتوا از یوتیوب، اسپاتیفای، اینستاگرام، تیک‌تاک و بیش از 1800+ سایت دیگر!
 
+---
+
+## 📁 نقشه‌ی پروژه
+
+```
+nightnote_downloder/
+├── bot/  db/  utils/  worker/  webserver/  migrations/   ← کد اصلی
+├── tests/                                               ← تست‌ها
+├── deploy/                                              ← 🚀 استقرار
+│   ├── deploy.sh                                        ←   دیپلوی کامل تعاملی
+│   ├── setup_downloader_bot.sh                          ←   نصب/تعمیر
+│   └── systemd/                                         ←   unit های سرویس
+├── docs/                                                ← 📚 مستندات
+│   ├── INDEX.md  QUICKSTART.md  DEPLOYMENT.md
+│   ├── PROJECT_STRUCTURE.md  COMPLETE_SUMMARY.md
+│   └── CHANGELOG.md  replit.md
+├── requirements.txt  requirements-dev.txt
+├── Dockerfile  docker-compose.yml
+├── alembic.ini  pytest.ini  ruff.toml
+└── .env.example
+```
+
+### ⚡ نصب سریع روی سرور (یک دستور)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/USER/REPO/main/deploy/deploy.sh \
+  | sudo bash -s -- https://github.com/USER/REPO.git
+```
+
+خودش پروژه رو دانلود می‌کنه، پیش‌نیازها (git/python3-venv/ffmpeg/redis/docker) رو
+نصب می‌کنه، اطلاعات لازم (`BOT_TOKEN`، `ADMIN_IDS` و...) رو می‌پرسه،
+IP عمومی رو تشخیص می‌ده و `.env` کامل می‌سازه، بعد سرویس systemd رو بالا میاره.
+جزئیات بیشتر: [`deploy/README.md`](deploy/README.md)
+
+### 📚 مستندات
+
+| موضوع | فایل |
+|-------|------|
+| شاخص کل | [`docs/INDEX.md`](docs/INDEX.md) |
+| شروع سریع | [`docs/QUICKSTART.md`](docs/QUICKSTART.md) |
+| استقرار | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) |
+| اسکریپت‌های deploy | [`deploy/README.md`](deploy/README.md) |
+| ساختار فایل‌ها | [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md) |
+| تغییرات | [`docs/CHANGELOG.md`](docs/CHANGELOG.md) |
+
+---
+
 ## ✨ ویژگی‌ها
 
 ✅ **دریافت لینک در گروپ یا خصوصی** - لینک رو بفرستید تا خودکار دانلود شود

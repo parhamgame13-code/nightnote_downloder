@@ -1,21 +1,27 @@
 # 📚 شاخص و راهنمای پروژه
 
+> 📁 همه‌ی مستندات تو پوشه‌ی `docs/` هستن؛ کد اصلی تو ریشه‌ی پروژه‌ست.
+
 ## 🎯 شروع از اینجا
 
 ### 👶 برای شروع فوری:
 1. [`QUICKSTART.md`](QUICKSTART.md) - 5 دقیقه تا نصب
 
 ### 📖 برای درک کامل:
-2. [`README.md`](README.md) - راهنمای جامع
+2. [`../README.md`](../README.md) - راهنمای جامع (ریشه‌ی پروژه)
 
 ### 🏗️ برای معماری:
 3. [`PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md) - ساختار فایل‌ها
 
 ### 🚀 برای استقرار:
 4. [`DEPLOYMENT.md`](DEPLOYMENT.md) - راهنمای deploy
+5. [`../deploy/README.md`](../deploy/README.md) - اسکریپت‌های deploy (خودکار)
 
 ### ✨ برای خلاصه:
-5. [`COMPLETE_SUMMARY.md`](COMPLETE_SUMMARY.md) - خلاصه کامل
+6. [`COMPLETE_SUMMARY.md`](COMPLETE_SUMMARY.md) - خلاصه کامل
+
+### 📝 تغییرات:
+7. [`CHANGELOG.md`](CHANGELOG.md) - تاریخچه‌ی نسخه‌ها
 
 ---
 
@@ -76,10 +82,10 @@ python -m bot.main
 | سوال | جواب |
 |------|------|
 | **کتاب‌خانه‌های استفاده شده؟** | [`requirements.txt`](requirements.txt) |
-| **ساختار دیتابیس؟** | [`db/models.py`](db/models.py) |
-| **نحوه دانلود؟** | [`worker/tasks.py`](worker/tasks.py) |
-| **شناسایی سایت؟** | [`utils/link_detector.py`](utils/link_detector.py) |
-| **استخراج metadata؟** | [`utils/metadata.py`](utils/metadata.py) |
+| **ساختار دیتابیس؟** | [`db/models.py`](../db/models.py) |
+| **نحوه دانلود؟** | [`worker/tasks.py`](../worker/tasks.py) |
+| **شناسایی سایت؟** | [`utils/link_detector.py`](../utils/link_detector.py) |
+| **استخراج metadata؟** | [`utils/metadata.py`](../utils/metadata.py) |
 | **استقرار کجا؟** | [`DEPLOYMENT.md`](DEPLOYMENT.md) |
 
 ---
@@ -210,7 +216,7 @@ services:
 ## 📞 پشتیبانی
 
 ### اگه مشکل دارید:
-1. [`README.md`](README.md) را بخوانید
+1. [`../README.md`](../README.md) را بخوانید
 2. [`QUICKSTART.md`](QUICKSTART.md) را دنبال کنید
 3. [`DEPLOYMENT.md`](DEPLOYMENT.md) را چک کنید
 4. GitHub Issues را جستجو کنید
@@ -219,7 +225,7 @@ services:
 
 ## ✅ Checklist
 
-- [ ] [`README.md`](README.md) را خوندید
+- [ ] [`../README.md`](../README.md) را خوندید
 - [ ] [`QUICKSTART.md`](QUICKSTART.md) را دنبال کردید
 - [ ] `.env` را تکمیل کردید
 - [ ] `python -m bot.main` اجرا کردید

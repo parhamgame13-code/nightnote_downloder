@@ -281,9 +281,11 @@ if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: activ
 fi
 
 # ---------- 8) اجرای setup اصلی خود پروژه ----------
-SETUP_SCRIPT="$INSTALL_DIR/setup_downloader_bot.sh"
+# (تو deploy/ نگه‌داری می‌شه؛ سازگاری با چیدمان قدیمی ریشه هم حفظ شده)
+SETUP_SCRIPT="$INSTALL_DIR/deploy/setup_downloader_bot.sh"
+[ -f "$SETUP_SCRIPT" ] || SETUP_SCRIPT="$INSTALL_DIR/setup_downloader_bot.sh"
 if [ ! -f "$SETUP_SCRIPT" ]; then
-    fail "فایل $SETUP_SCRIPT پیدا نشد!"
+    fail "فایل setup_downloader_bot.sh پیدا نشد (نه تو deploy/ نه تو ریشه)!"
     exit 1
 fi
 chmod +x "$SETUP_SCRIPT"

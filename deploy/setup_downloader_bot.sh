@@ -168,11 +168,14 @@ else
 fi
 
 # 12) فایل‌های سرویس: مسیرها با INSTALL_DIR هماهنگ و کپی به systemd
+# (units تو deploy/systemd/ نگه‌داری می‌شن تا ریشه‌ی پروژه تمیز بمونه)
 for UNIT in downloader-bot.service downloader-bot-directlink.service; do
-    SRC="$INSTALL_DIR/$UNIT"
+    SRC="$INSTALL_DIR/deploy/systemd/$UNIT"
+    # سازگاری با ریپوهای قدیمی که units رو تو ریشه داشتن
+    [ -f "$SRC" ] || SRC="$INSTALL_DIR/$UNIT"
     TARGET="/etc/systemd/system/$UNIT"
     if [ ! -f "$SRC" ]; then
-        warn "فایل $SRC پیدا نشد — این واحد رد شد."
+        warn "فایل $INSTALL_DIR/deploy/systemd/$UNIT پیدا نشد — این واحد رد شد."
         continue
     fi
     TMP_UNIT=$(mktemp)

@@ -43,22 +43,36 @@ downloader_bot/
 │   ├── env.py
 │   └── versions/                    # 001 تا 007 (آخرین: تنظیمات کاربر + raw_domain)
 │
-├── 📂 logs/                         # فایل‌های لاگ
+├── 🧪 tests/                         # تست‌ها (pytest)
+├── ⚙️ pytest.ini                     # تنظیمات pytest
+├── ⚙️ ruff.toml                      # تنظیمات linter
+├── ⚙️ alembic.ini                    # تنظیمات migration (script_location=migrations)
+├── 📂 logs/                          # فایل‌های لاگ (git-ignored)
 │   └── bot.log
 │
-├── 📝 README.md                     # راهنمای اصلی
-├── 🚀 QUICKSTART.md                 # شروع سریع
-├── 🚀 DEPLOYMENT.md                 # راهنمای استقرار
-├── 📄 PROJECT_STRUCTURE.md          # این فایل
-├── 📚 INDEX.md                      # شاخص پروژه
-├── ✨ COMPLETE_SUMMARY.md           # خلاصه کامل
-│
+├── 📝 README.md                     # راهنمای اصلی (ریشه - کنوانسیون گیت‌هاب)
 ├── ⚙️ .env.example                  # نمونه متغیرهای محیطی
 ├── 📦 requirements.txt               # وابستگی‌های Python
+├── 📦 requirements-dev.txt           # وابستگی‌های توسعه (pytest)
 ├── 🐋 Dockerfile                    # ایمیج خودِ بات
+├── 🐳 docker-compose.yml            # redis + postgres + bot + worker + beat + telegram-bot-api
 │
-└── 🐳 docker-compose.yml            # redis + postgres + bot + worker + beat
-                                       # (telegram-bot-api به‌صورت اختیاری/کامنت‌شده)
+├── 📁 deploy/                       # 🚀 همه‌چیز مربوط به استقرار
+│   ├── README.md                    #   راهنمای اسکریپت‌های deploy
+│   ├── deploy.sh                    #   دیپلوی کامل تعاملی (دانلود + نصب + .env)
+│   ├── setup_downloader_bot.sh      #   نصب/تعمیر idempotent (بدون دانلود)
+│   └── systemd/
+│       ├── downloader-bot.service            #   بات + worker + beat
+│       └── downloader-bot-directlink.service #   وب‌سرور لینک مستقیم
+│
+└── 📁 docs/                         # 📚 همه‌ی مستندات
+    ├── INDEX.md                     #   شاخص پروژه
+    ├── QUICKSTART.md                #   شروع سریع
+    ├── DEPLOYMENT.md                #   راهنمای استقرار
+    ├── PROJECT_STRUCTURE.md         #   این فایل
+    ├── COMPLETE_SUMMARY.md          #   خلاصه کامل
+    ├── CHANGELOG.md                 #   تاریخچه‌ی نسخه‌ها
+    └── replit.md                    #   راهنمای اجرا روی Replit
 
 ```
 
