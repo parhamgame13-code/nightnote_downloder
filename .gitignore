@@ -42,3 +42,6 @@ tmp/
 Thumbs.db
 .idea/
 .vscode/
+
+# ===== فایل‌های افزونه ادیتور (video2code/zcode) =====
+.v2c/
