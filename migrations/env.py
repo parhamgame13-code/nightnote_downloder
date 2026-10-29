@@ -1,6 +1,7 @@
 import asyncio
 import os
 from logging.config import fileConfig
+from pathlib import Path
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
@@ -12,7 +13,7 @@ from dotenv import load_dotenv
 # مسیر صریح: بدون این، find_dotenv به دایرکتوریِ فراخوان وابسته‌ست و روی
 # محیط‌هایی مثل Deepnote (cwd متفاوت / .env در مسیر دیگه) ممکنه فایل اشتباه
 # (یا هیچ فایلی) لود شه و DATABASE_URL پیش‌فرض یا کهنه استفاده بشه.
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / ".env")
 
 # این مقدار از alembic.ini خونده میشه
