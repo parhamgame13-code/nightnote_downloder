@@ -9,7 +9,11 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 from dotenv import load_dotenv
 
-load_dotenv()
+# مسیر صریح: بدون این، find_dotenv به دایرکتوریِ فراخوان وابسته‌ست و روی
+# محیط‌هایی مثل Deepnote (cwd متفاوت / .env در مسیر دیگه) ممکنه فایل اشتباه
+# (یا هیچ فایلی) لود شه و DATABASE_URL پیش‌فرض یا کهنه استفاده بشه.
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(PROJECT_ROOT / ".env")
 
 # این مقدار از alembic.ini خونده میشه
 config = context.config
