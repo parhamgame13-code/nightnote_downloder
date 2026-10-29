@@ -198,7 +198,10 @@ setup_postgres() {
     else
         ok "دیتابیس «downloader_bot» از قبل موجوده."
     fi
-    DATABASE_URL="postgresql+asyncpg://downloader:${PG_PASS}@localhost:${PG_PORT}/downloader_bot"
+    # 127.0.0.1 نه localhost: asyncpg برای localhost اول ::1 (IPv6) رو امتحان
+    # می‌کنه و اگه یه postgres دیگه اونجا گوش بده (مثل زیرساخت Deepnote)
+    # InvalidPasswordError پرت‌وقت‌کننده می‌گیری در حالی که psql سبزه.
+    DATABASE_URL="postgresql+asyncpg://downloader:${PG_PASS}@127.0.0.1:${PG_PORT}/downloader_bot"
 
     # تأیید نهایی از همون مسیری که خود بات می‌ره (TCP + رمز) — نه فقط سوکت محلی.
     # بدون این چک، خطای رمز فقط بعداً وسط alembic ظاهر می‌شد.
