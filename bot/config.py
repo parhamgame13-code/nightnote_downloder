@@ -13,10 +13,10 @@ class Settings(BaseSettings):
 
     # تلگرام
     BOT_TOKEN: str
-    BOT_USERNAME: str = "NightDownloaderBot"
+    BOT_USERNAME: str = ""  # یوزرنیم بات (بدون @) - اختیاری؛ فعلاً هیچ‌جای کد مصرف نمی‌شه
     
     # کانال‌ها/گروپ‌ها
-    CHANNEL_USERNAME: str = "NightNote_official"
+    CHANNEL_USERNAME: str = ""  # کانال معرفی‌شده (بدون @) - اختیاری؛ خالی = بدون اشاره به کانال
     ALLOWED_GROUP_IDS: Annotated[list[int], NoDecode] = []  # "123,456" در .env
     
     # ادمین

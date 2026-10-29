@@ -374,6 +374,4 @@ MIT License
 
 ---
 
-**🔗 لینک مهم:**
-- ربات: [@NightDownloaderBot](https://t.me/NightDownloaderBot)
-- کانال: [@NightNote_official](https://t.me/NightNote_official)
+**🔗 لینک‌ها:** لینک ربات و کانال خودت رو فقط تو `.env` (و جای دلخواه خودت) نگه دار — تو ریپوی عمومی قرار نمی‌گیره.

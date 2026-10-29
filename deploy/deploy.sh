@@ -451,9 +451,9 @@ while :; do
 done
 
 # ----- بقیه‌ی تنظیمات تلگرام -----
-ask "BOT_USERNAME (یوزرنیم بات بدون @)" "$(envget BOT_USERNAME NightDownloaderBot)"
+ask "BOT_USERNAME (یوزرنیم بات بدون @ — اختیاری، Enter = خالی)" "$(envget BOT_USERNAME "")"
 BOT_USERNAME="$ANSWER"
-ask "CHANNEL_USERNAME (کانال معرفی‌شده بدون @)" "$(envget CHANNEL_USERNAME NightNote_official)"
+ask "CHANNEL_USERNAME (کانال معرفی‌شده بدون @ — اختیاری، Enter = خالی)" "$(envget CHANNEL_USERNAME "")"
 CHANNEL_USERNAME="$ANSWER"
 ask "ALLOWED_GROUP_IDS (گروپ‌های مجاز با کاما — خالی = همه)" "$(envget ALLOWED_GROUP_IDS "")"
 ALLOWED_GROUP_IDS="$ANSWER"
