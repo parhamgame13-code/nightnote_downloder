@@ -109,57 +109,76 @@ chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR" /var/lib/downloader_bot
 chown "$SERVICE_USER:$SERVICE_USER" /var/lib/telegram-bot-api
 ok "پوشه‌های داده و مالکیت‌ها درست شد."
 
-# 4) بررسی/نصب Docker
+# 4) بررسی/نصب Docker — و اطمینان از اینکه دیمون واقعاً بالاست (نه فقط نصب)
+DOCKER_OK=0
 if ! command -v docker &>/dev/null; then
     info "Docker نصب نیست، در حال نصب..."
     curl -fsSL https://get.docker.com | sh
     has_systemd && systemctl enable --now docker &>/dev/null || true
-    ok "Docker نصب و فعال شد."
+    ok "Docker نصب شد."
 else
     ok "Docker از قبل نصبه: $(docker --version)"
     has_systemd && systemctl enable --now docker &>/dev/null || true
 fi
 
-# اگه dockerd در حال اجرا نیست و systemd هم نداریم، خودمون استارتش می‌کنیم
 if ! docker info &>/dev/null; then
     if has_systemd; then
         systemctl start docker &>/dev/null || true
     else
         warn "داِمن Docker در حال اجرا نیست و systemd هم در دسترس نیست."
-        warn "اگه تو کانتینر هستی (Docker-in-Docker)، ممکنه Local Bot API قابل اجرا نباشه."
+        warn "اگه تو کانتینر هستی (مثل Deepnote)، Docker قابل اجرا نیست — ادامه می‌دیم بدون Local Bot API."
     fi
     sleep 2
 fi
 
-# 5) بررسی/ساخت کانتینر Local Bot API Server (برای فایل‌های تا ۲ گیگ)
-if docker ps --format '{{.Names}}' | grep -q '^telegram-bot-api$'; then
-    ok "کانتینر telegram-bot-api از قبل در حال اجراست."
-elif docker ps -a --format '{{.Names}}' | grep -q '^telegram-bot-api$'; then
-    info "کانتینر telegram-bot-api وجود داره ولی خاموشه، در حال استارت..."
-    docker start telegram-bot-api &>/dev/null
-    sleep 2
-    ok "کانتینر telegram-bot-api استارت شد."
+if docker info &>/dev/null; then
+    DOCKER_OK=1
+    ok "داِمن Docker در حال اجراست."
 else
-    info "کانتینر telegram-bot-api وجود نداره، در حال ساخت..."
-    # پورت فقط روی localhost هاست - از اینترنت بیرون بسته‌ست
-    docker run -d \
-        --name telegram-bot-api \
-        --restart always \
-        -p 127.0.0.1:8081:8081 \
-        -v /var/lib/telegram-bot-api:/var/lib/telegram-bot-api \
-        -e TELEGRAM_API_ID="$TG_API_ID" \
-        -e TELEGRAM_API_HASH="$TG_API_HASH" \
-        -e TELEGRAM_LOCAL=1 \
-        aiogram/telegram-bot-api:latest
-    sleep 3
-    ok "کانتینر telegram-bot-api ساخته و استارت شد."
+    warn "داِمن Docker قابل اجرا نیست — Local Bot API اجرا نمی‌شه."
 fi
 
-sleep 2
-if docker ps --format '{{.Names}} {{.Status}}' | grep telegram-bot-api | grep -qi "restarting"; then
-    fail "کانتینر telegram-bot-api داره ری‌استارت می‌شه (crash loop). لاگش رو چک کن: docker logs telegram-bot-api --tail 30"
-else
-    ok "کانتینر telegram-bot-api پایدار و سالمه."
+# 5) بررسی/ساخت کانتینر Local Bot API Server (برای فایل‌های تا ۲ گیگ) — فقط با Docker سالم
+if [ "$DOCKER_OK" = "1" ]; then
+    if docker ps --format '{{.Names}}' | grep -q '^telegram-bot-api$'; then
+        ok "کانتینر telegram-bot-api از قبل در حال اجراست."
+    elif docker ps -a --format '{{.Names}}' | grep -q '^telegram-bot-api$'; then
+        info "کانتینر telegram-bot-api وجود داره ولی خاموشه، در حال استارت..."
+        docker start telegram-bot-api &>/dev/null
+        sleep 2
+        ok "کانتینر telegram-bot-api استارت شد."
+    else
+        info "کانتینر telegram-bot-api وجود نداره، در حال ساخت..."
+        # پورت فقط روی localhost هاست - از اینترنت بیرون بسته‌ست
+        if ! docker run -d \
+            --name telegram-bot-api \
+            --restart always \
+            -p 127.0.0.1:8081:8081 \
+            -v /var/lib/telegram-bot-api:/var/lib/telegram-bot-api \
+            -e TELEGRAM_API_ID="$TG_API_ID" \
+            -e TELEGRAM_API_HASH="$TG_API_HASH" \
+            -e TELEGRAM_LOCAL=1 \
+            aiogram/telegram-bot-api:latest; then
+            fail "docker run ناموفق بود — Local Bot API کنار گذاشته می‌شه."
+            DOCKER_OK=0
+        else
+            sleep 3
+            ok "کانتینر telegram-bot-api ساخته و استارت شد."
+        fi
+    fi
+
+    if [ "$DOCKER_OK" = "1" ]; then
+        sleep 2
+        if docker ps --format '{{.Names}} {{.Status}}' | grep telegram-bot-api | grep -qi "restarting"; then
+            fail "کانتینر telegram-bot-api داره ری‌استارت می‌شه (crash loop). لاگش رو چک کن: docker logs telegram-bot-api --tail 30"
+            DOCKER_OK=0
+        elif ! docker ps --format '{{.Names}}' | grep -q '^telegram-bot-api$'; then
+            fail "کانتینر telegram-bot-api در حال اجرا نیست!"
+            DOCKER_OK=0
+        else
+            ok "کانتینر telegram-bot-api پایدار و سالمه."
+        fi
+    fi
 fi
 
 # 6) .env — اگه نبود از نمونه می‌سازیم؛ مقادیر اجباریِ خالی رو می‌پرسیم و
@@ -242,6 +261,15 @@ fi
 chown "$SERVICE_USER:$SERVICE_USER" "$ENV_FILE"
 chmod 600 "$ENV_FILE"
 ok "فایل .env آماده و مقادیر اجباری پرن."
+
+# 6.5) اگه Docker/کانتینر Local Bot API در دسترس نیست، حتماً خاموشش کن؛
+# وگرنه بات همه‌ی درخواست‌هاش رو به localhost:8081 می‌فرسته که جواب نمی‌ده
+# و کل بات از کار می‌افته (نه فقط سقف ۵۰ مگ).
+if [ "$DOCKER_OK" != "1" ]; then
+    warn "Local Bot API Server در دسترس نیست — USE_LOCAL_BOT_API_SERVER=false ست می‌شه (سقف آپلود به ۵۰MB برمی‌گرده)."
+    upsert_env USE_LOCAL_BOT_API_SERVER false
+    grep -qE '^[[:space:]]*#?[[:space:]]*MAX_FILE_SIZE_MB=' "$ENV_FILE" || upsert_env MAX_FILE_SIZE_MB 50
+fi
 
 # 7) venv (با کاربر سرویس ساخته/استفاده می‌شه تا مالکیت‌ها خراب نشه)
 if [ ! -f "$VENV_DIR/bin/python3" ]; then

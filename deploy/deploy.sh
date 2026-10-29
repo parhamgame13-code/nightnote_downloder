@@ -178,7 +178,7 @@ setup_postgres() {
         pg_as psql -p "$PG_PORT" -c "CREATE ROLE downloader LOGIN PASSWORD '$PG_PASS';" || { fail "ساخت کاربر postgres ناموفق بود."; exit 1; }
         ok "کاربر دیتابیس «downloader» ساخته شد."
     else
-        pg_as psql -p "$PG_PORT" -c "ALTER ROLE downloader WITH LOGIN PASSWORD '$PG_PASS';" || true
+        pg_as psql -p "$PG_PORT" -c "ALTER ROLE downloader WITH LOGIN PASSWORD '$PG_PASS';" || { fail "تغییر رمز کاربر postgres ناموفق بود."; exit 1; }
         ok "کاربر «downloader» از قبل بود — رمز جدیدش ست شد."
     fi
     if ! pg_as psql -p "$PG_PORT" -tAc "SELECT 1 FROM pg_database WHERE datname='downloader_bot'" 2>/dev/null | grep -q 1; then
@@ -188,6 +188,19 @@ setup_postgres() {
         ok "دیتابیس «downloader_bot» از قبل موجوده."
     fi
     DATABASE_URL="postgresql+asyncpg://downloader:${PG_PASS}@localhost:${PG_PORT}/downloader_bot"
+
+    # تأیید نهایی از همون مسیری که خود بات می‌ره (TCP + رمز) — نه فقط سوکت محلی.
+    # بدون این چک، خطای رمز فقط بعداً وسط alembic ظاهر می‌شد.
+    if ! PGPASSWORD="$PG_PASS" psql -h 127.0.0.1 -p "$PG_PORT" -U downloader -d downloader_bot -tAc "SELECT 1" &>/dev/null; then
+        pg_as psql -p "$PG_PORT" -c "ALTER ROLE downloader WITH LOGIN PASSWORD '$PG_PASS';" || true
+        sleep 1
+        if ! PGPASSWORD="$PG_PASS" psql -h 127.0.0.1 -p "$PG_PORT" -U downloader -d downloader_bot -tAc "SELECT 1" &>/dev/null; then
+            fail "اتصال TCP با کاربر/رمز downloader برقرار نشد!"
+            echo "   چک دستی:  PGPASSWORD='...' psql -h 127.0.0.1 -p $PG_PORT -U downloader -d downloader_bot -c 'SELECT 1'"
+            exit 1
+        fi
+    fi
+    ok "اتصال TCP با رمز جدید تأیید شد."
 }
 
 echo "=============================================="
