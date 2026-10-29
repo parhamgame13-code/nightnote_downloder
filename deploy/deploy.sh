@@ -113,37 +113,81 @@ setup_postgres() {
         dnf install -y postgresql-server || warn "نصب postgresql-server ناموفق بود."
         (postgresql-setup --initdb) &>/dev/null || true
     fi
-    if has_systemd; then systemctl enable --now postgresql 2>/dev/null || true; fi
 
     pg_as() {
         if command -v runuser &>/dev/null; then runuser -u postgres -- "$@"
         else sudo -u postgres "$@"; fi
     }
+
+    # نسخه‌ی نصب‌شده (Debian: /usr/lib/postgresql/<ver>)
+    local PG_VER PG_PORT
+    PG_VER="$(ls /usr/lib/postgresql/ 2>/dev/null | sort -V | tail -n 1)"
+
+    if has_systemd; then
+        systemctl enable --now postgresql 2>/dev/null || true
+    fi
+
+    # روی سرورهایی بدون systemd (یا وقتی استارت خودکار نصب انجام نشده) کلاستر
+    # اصلاً ساخته/بالا نمیاد — pg_createcluster/pg_ctlcluster به systemd نیاز ندارن
+    if command -v pg_lsclusters &>/dev/null; then
+        if ! pg_lsclusters -h 2>/dev/null | grep -q .; then
+            if [ -n "$PG_VER" ] && command -v pg_createcluster &>/dev/null; then
+                info "هیچ کلاستری ساخته نشده بود — ساخت کلاستر نسخه $PG_VER ..."
+                pg_createcluster "$PG_VER" main || warn "pg_createcluster ناموفق بود."
+            fi
+        fi
+        local DOWN
+        DOWN="$(pg_lsclusters -h 2>/dev/null | awk '$4=="down"{print $1; exit}')"
+        if [ -n "$DOWN" ] && command -v pg_ctlcluster &>/dev/null; then
+            info "کلاستر PostgreSQL خاموشه — استارت با pg_ctlcluster ..."
+            pg_ctlcluster "$DOWN" main start || warn "استارت کلاستر ناموفق بود."
+        fi
+        # پورت واقعی کلاستر (اگه 5432 اشغال باشه می‌تونه 5433 باشه)
+        PG_PORT="$(pg_lsclusters -h 2>/dev/null | awk 'NR==1{print $3}')"
+    fi
+    PG_PORT="${PG_PORT:-5432}"
+
+    if ! has_systemd && [ -n "$PG_VER" ] && command -v pg_ctlcluster &>/dev/null; then
+        # بدون systemd بعد از ریبوت postgres خودش بالا نمیاد — @reboot cron
+        if command -v crontab &>/dev/null; then
+            (crontab -l 2>/dev/null | grep -Fv "pg_ctlcluster" ; echo "@reboot /usr/bin/pg_ctlcluster ${PG_VER} main start") | crontab - 2>/dev/null \
+                && ok "استارت خودکار PostgreSQL بعد از ریبوت (cron @reboot) ست شد." \
+                || warn "ست کردن cron @reboot برای postgres ناموفق بود."
+        else
+            warn "cron نصب نیست — بعد از هر ریبوت باید دستی pg_ctlcluster ${PG_VER} main start بزنی."
+        fi
+    fi
+
     local i
-    for i in $(seq 1 20); do
-        pg_as pg_isready -q &>/dev/null && break
+    for i in $(seq 1 30); do
+        pg_as pg_isready -q -p "$PG_PORT" &>/dev/null && break
         sleep 1
     done
-    if ! pg_as pg_isready -q &>/dev/null; then
-        warn "PostgreSQL هنوز آماده نیست — ادامه می‌دم؛ اگه alembic خطا داد، setup رو دوباره اجرا کن."
+    if ! pg_as pg_isready -q -p "$PG_PORT" &>/dev/null; then
+        fail "PostgreSQL بالا نیومد!"
+        echo "   دستی چک کن:   pg_lsclusters"
+        echo "   استارت دستی:  pg_ctlcluster ${PG_VER:-15} main start"
+        echo "   بعدش دوباره deploy.sh رو اجرا کن — یا این بار SQLite رو انتخاب کن."
+        exit 1
     fi
+    ok "PostgreSQL آماده‌ست (پورت $PG_PORT)."
 
     local PG_PASS
     PG_PASS=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 24) || true
-    if ! pg_as psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='downloader'" 2>/dev/null | grep -q 1; then
-        pg_as psql -c "CREATE ROLE downloader LOGIN PASSWORD '$PG_PASS';" || { fail "ساخت کاربر postgres ناموفق بود."; exit 1; }
+    if ! pg_as psql -p "$PG_PORT" -tAc "SELECT 1 FROM pg_roles WHERE rolname='downloader'" 2>/dev/null | grep -q 1; then
+        pg_as psql -p "$PG_PORT" -c "CREATE ROLE downloader LOGIN PASSWORD '$PG_PASS';" || { fail "ساخت کاربر postgres ناموفق بود."; exit 1; }
         ok "کاربر دیتابیس «downloader» ساخته شد."
     else
-        pg_as psql -c "ALTER ROLE downloader WITH LOGIN PASSWORD '$PG_PASS';" || true
+        pg_as psql -p "$PG_PORT" -c "ALTER ROLE downloader WITH LOGIN PASSWORD '$PG_PASS';" || true
         ok "کاربر «downloader» از قبل بود — رمز جدیدش ست شد."
     fi
-    if ! pg_as psql -tAc "SELECT 1 FROM pg_database WHERE datname='downloader_bot'" 2>/dev/null | grep -q 1; then
-        pg_as createdb -O downloader downloader_bot || { fail "ساخت دیتابیس ناموفق بود."; exit 1; }
+    if ! pg_as psql -p "$PG_PORT" -tAc "SELECT 1 FROM pg_database WHERE datname='downloader_bot'" 2>/dev/null | grep -q 1; then
+        pg_as createdb -p "$PG_PORT" -O downloader downloader_bot || { fail "ساخت دیتابیس ناموفق بود."; exit 1; }
         ok "دیتابیس «downloader_bot» ساخته شد."
     else
         ok "دیتابیس «downloader_bot» از قبل موجوده."
     fi
-    DATABASE_URL="postgresql+asyncpg://downloader:${PG_PASS}@localhost:5432/downloader_bot"
+    DATABASE_URL="postgresql+asyncpg://downloader:${PG_PASS}@localhost:${PG_PORT}/downloader_bot"
 }
 
 echo "=============================================="
