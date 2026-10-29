@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     # می‌کنیم (پیش‌فرض ۳۰ دقیقه) تا برای فایل‌های بزرگ هم کار کنه.
     BOT_SESSION_TIMEOUT: int = 1800  # 30 دقیقه
 
+    # پروکسی اختیاری برای اتصال بات به Telegram API (خالی = مستقیم).
+    # نکته: aiohttp (برخلاف curl/yt-dlp) متغیرهای پروکسی محیط رو نادیده
+    # می‌گیره؛ build_bot_session اگه این ست نباشه خودش HTTPS_PROXY/HTTP_PROXY
+    # محیط رو هم چک می‌کنه و به سشن پاس می‌ده.
+    TELEGRAM_PROXY: Optional[str] = None
+
     # Local Bot API Server خودش هر فایلی که آپلود/دانلود می‌شه رو زیر
     # /var/lib/telegram-bot-api/<token>/... برای همیشه نگه می‌داره (خودش
     # هیچ‌وقت پاکش نمی‌کنه) - این باعث می‌شه هر فایل عملاً دوبار رو دیسک
@@ -141,12 +147,25 @@ def build_bot_session():
     aiogram (که برای آپلود فایل‌های حجیم مثل ویدیوی ۱.۵ گیگ کافی نیست).
     اگه USE_LOCAL_BOT_API_SERVER روشن باشه، به Local Bot API Server
     (به‌جای api.telegram.org) هم وصل می‌شه."""
+    import os
+
     from aiogram.client.session.aiohttp import AiohttpSession
 
+    proxy = (
+        settings.TELEGRAM_PROXY
+        or os.getenv("HTTPS_PROXY")
+        or os.getenv("https_proxy")
+        or os.getenv("HTTP_PROXY")
+        or os.getenv("http_proxy")
+    )
+    kwargs = {"timeout": settings.BOT_SESSION_TIMEOUT}
+    if proxy:
+        kwargs["proxy"] = proxy
+
     if not settings.USE_LOCAL_BOT_API_SERVER:
-        return AiohttpSession(timeout=settings.BOT_SESSION_TIMEOUT)
+        return AiohttpSession(**kwargs)
 
     from aiogram.client.telegram import TelegramAPIServer
 
     server = TelegramAPIServer.from_base(settings.LOCAL_BOT_API_URL, is_local=True)
-    return AiohttpSession(api=server, timeout=settings.BOT_SESSION_TIMEOUT)
+    return AiohttpSession(api=server, **kwargs)
