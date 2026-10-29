@@ -172,14 +172,25 @@ setup_postgres() {
     fi
     ok "PostgreSQL آماده‌ست (پورت $PG_PORT)."
 
-    local PG_PASS
-    PG_PASS=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 24) || true
-    if ! pg_as psql -p "$PG_PORT" -tAc "SELECT 1 FROM pg_roles WHERE rolname='downloader'" 2>/dev/null | grep -q 1; then
-        pg_as psql -p "$PG_PORT" -c "CREATE ROLE downloader LOGIN PASSWORD '$PG_PASS';" || { fail "ساخت کاربر postgres ناموفق بود."; exit 1; }
-        ok "کاربر دیتابیس «downloader» ساخته شد."
+    local PG_PASS EXISTING_PASS=""
+    # اگه .env از قبل رمزی داره و باهاش اتصال TCP برقرار می‌شه، همون رو نگه دار —
+    # تولید رمز جدید توی هر اجرا باعث می‌شه .env و سرور از هم جدا بیفتن و
+    # alembic وسط کار با InvalidPasswordError بترکه.
+    if [ -n "$CUR_DB_URL" ] && [[ "$CUR_DB_URL" =~ postgresql\+asyncpg://downloader:([^@]+)@localhost ]]; then
+        EXISTING_PASS="${BASH_REMATCH[1]}"
+    fi
+    if [ -n "$EXISTING_PASS" ] && PGPASSWORD="$EXISTING_PASS" psql -h 127.0.0.1 -p "$PG_PORT" -U downloader -d postgres -tAc "SELECT 1" &>/dev/null; then
+        PG_PASS="$EXISTING_PASS"
+        ok "رمز فعلی .env درست کار می‌کنه — همون نگه داشته شد."
     else
-        pg_as psql -p "$PG_PORT" -c "ALTER ROLE downloader WITH LOGIN PASSWORD '$PG_PASS';" || { fail "تغییر رمز کاربر postgres ناموفق بود."; exit 1; }
-        ok "کاربر «downloader» از قبل بود — رمز جدیدش ست شد."
+        PG_PASS=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 24) || true
+        if ! pg_as psql -p "$PG_PORT" -tAc "SELECT 1 FROM pg_roles WHERE rolname='downloader'" 2>/dev/null | grep -q 1; then
+            pg_as psql -p "$PG_PORT" -c "CREATE ROLE downloader LOGIN PASSWORD '$PG_PASS';" || { fail "ساخت کاربر postgres ناموفق بود."; exit 1; }
+            ok "کاربر دیتابیس «downloader» ساخته شد."
+        else
+            pg_as psql -p "$PG_PORT" -c "ALTER ROLE downloader WITH LOGIN PASSWORD '$PG_PASS';" || { fail "تغییر رمز کاربر postgres ناموفق بود."; exit 1; }
+            ok "کاربر «downloader» از قبل بود — رمز جدیدش ست شد."
+        fi
     fi
     if ! pg_as psql -p "$PG_PORT" -tAc "SELECT 1 FROM pg_database WHERE datname='downloader_bot'" 2>/dev/null | grep -q 1; then
         pg_as createdb -p "$PG_PORT" -O downloader downloader_bot || { fail "ساخت دیتابیس ناموفق بود."; exit 1; }
