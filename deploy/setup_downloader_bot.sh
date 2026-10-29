@@ -27,6 +27,54 @@ warn() { echo -e "⚠️  $1"; }
 info() { echo -e "🔹 $1"; }
 fail() { echo -e "❌ $1"; }
 
+# آیا systemd در دسترسه؟ (روی کانتینرها مثل Deepnote/Docker نیست)
+has_systemd() {
+    command -v systemctl &>/dev/null && [ -d /run/systemd/system ]
+}
+
+# ---------- کمکی‌های .env و پرسش تعاملی (برای وقتی .env ناقصه) ----------
+# دیگه وسط کار نمی‌ایستیم که «برو با nano پرش کن» — مقادیر اجباریِ خالی رو
+# همین‌جا می‌پرسیم و مستقیم داخل .env می‌نویسیم (بقیه‌ی فایل دست‌نخورده می‌مونه).
+ENV_FILE="$INSTALL_DIR/.env"
+
+ask_read() {  # ask_read "prompt" -> ANSWER (از /dev/tty می‌خونه)
+    if [ -r /dev/tty ]; then
+        read -r -p "$1" ANSWER < /dev/tty
+    else
+        read -r -p "$1" ANSWER
+    fi
+}
+can_prompt() { [ -r /dev/tty ] || [ -t 0 ]; }
+
+envget() {  # envget KEY [default] — مقدار فعلی از .env (خط فعال یا کامنت‌شده)
+    local v=""
+    if [ -f "$ENV_FILE" ]; then
+        v=$(grep -E "^[[:space:]]*#?[[:space:]]*$1=" "$ENV_FILE" 2>/dev/null | tail -n 1 | cut -d= -f2- | sed -E 's/^[[:space:]]+|[[:space:]]+$//g; s/^"(.*)"$/\1/') || v=""
+    fi
+    printf '%s' "${v:-${2:-}}"
+}
+upsert_env() {  # upsert_env KEY VALUE — همه‌ی خطوط این کلید (حتی کامنت‌شده) جایگزین می‌شن
+    local key="$1" value="$2"
+    if grep -qE "^[[:space:]]*#?[[:space:]]*${key}=" "$ENV_FILE" 2>/dev/null; then
+        # آدرسِ تکی (نه بازه‌ای!) — فقط خطوط منطبق با کلید عوض می‌شن
+        sed -i -E "/^[[:space:]]*#?[[:space:]]*${key}=/s|.*|${key}=${value}|" "$ENV_FILE"
+    else
+        printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+    fi
+}
+
+check_bot_token() {  # -> OK:<username> | INVALID | UNREACHABLE
+    local resp u
+    # بدون -f: پاسخ 401 (توکن غلط) هم باید برسه تا INVALID تشخیص داده شه
+    resp=$(curl -s -m 12 "https://api.telegram.org/bot${1}/getMe" 2>/dev/null) || { echo "UNREACHABLE"; return; }
+    if printf '%s' "$resp" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
+        u=$(printf '%s' "$resp" | grep -oE '"username"[[:space:]]*:[[:space:]]*"[^"]+"' | head -n 1 | sed -E 's/.*:[[:space:]]*"([^"]+)".*/\1/')
+        echo "OK:${u:-unknown}"
+    else
+        echo "INVALID"
+    fi
+}
+
 echo "=============================================="
 echo " شروع بررسی و راه‌اندازی کامل Downloader Bot"
 echo "=============================================="
@@ -65,11 +113,22 @@ ok "پوشه‌های داده و مالکیت‌ها درست شد."
 if ! command -v docker &>/dev/null; then
     info "Docker نصب نیست، در حال نصب..."
     curl -fsSL https://get.docker.com | sh
-    systemctl enable --now docker
+    has_systemd && systemctl enable --now docker &>/dev/null || true
     ok "Docker نصب و فعال شد."
 else
     ok "Docker از قبل نصبه: $(docker --version)"
-    systemctl enable --now docker &>/dev/null
+    has_systemd && systemctl enable --now docker &>/dev/null || true
+fi
+
+# اگه dockerd در حال اجرا نیست و systemd هم نداریم، خودمون استارتش می‌کنیم
+if ! docker info &>/dev/null; then
+    if has_systemd; then
+        systemctl start docker &>/dev/null || true
+    else
+        warn "داِمن Docker در حال اجرا نیست و systemd هم در دسترس نیست."
+        warn "اگه تو کانتینر هستی (Docker-in-Docker)، ممکنه Local Bot API قابل اجرا نباشه."
+    fi
+    sleep 2
 fi
 
 # 5) بررسی/ساخت کانتینر Local Bot API Server (برای فایل‌های تا ۲ گیگ)
@@ -103,29 +162,91 @@ else
     ok "کانتینر telegram-bot-api پایدار و سالمه."
 fi
 
-# 6) .env (اگه نبود از نمونه می‌سازیم و می‌ایستیم تا پرش کنی)
-if [ ! -f "$INSTALL_DIR/.env" ]; then
+# 6) .env — اگه نبود از نمونه می‌سازیم؛ مقادیر اجباریِ خالی رو می‌پرسیم و
+#    مستقیم داخل فایل می‌نویسیم (نیازی به ویرایش دستی با nano نیست)
+if [ ! -f "$ENV_FILE" ]; then
     if [ -f "$INSTALL_DIR/.env.example" ]; then
-        cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
-        chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/.env"
-        chmod 600 "$INSTALL_DIR/.env"
-        fail "فایل .env از روی .env.example ساخته شد ولی خالیه!"
-        echo "   الان این فایل رو باز کن و حداقل BOT_TOKEN و ADMIN_IDS رو پر کن:"
-        echo "   nano $INSTALL_DIR/.env"
-        echo "   بعد دوباره این اسکریپت رو اجرا کن."
-        exit 1
+        cp "$INSTALL_DIR/.env.example" "$ENV_FILE"
+        ok "فایل .env از روی .env.example ساخته شد."
     else
-        fail "نه .env هست نه .env.example — دستی درستش کن."
-        exit 1
+        printf '# NightDownloaderBot settings\n' > "$ENV_FILE"
+        warn ".env.example پیدا نشد؛ .env خالی ساخته شد."
+    fi
+fi
+
+if can_prompt; then
+    # ----- BOT_TOKEN (اجباری) -----
+    CUR_TOKEN=$(envget BOT_TOKEN "")
+    case "$CUR_TOKEN" in ""|"123456:ABC-your-token-here") CUR_TOKEN="" ;; esac
+    if [ -z "$CUR_TOKEN" ]; then
+        while :; do
+            ask_read "BOT_TOKEN (توکن بات از @BotFather — مثل 123456:ABC-...): "
+            T="${ANSWER:-}"
+            if [[ ! "$T" =~ ^[0-9]+:[A-Za-z0-9_-]+$ ]]; then
+                fail "فرمت توکن درست نیست (باید شبیه 123456:ABC-... باشه)."
+                continue
+            fi
+            info "چک کردن توکن با سرور تلگرام ..."
+            case "$(check_bot_token "$T")" in
+                OK:*)
+                    ok "توکن معتبره."
+                    break
+                    ;;
+                INVALID)
+                    fail "تلگرام این توکن رو رد کرد — دوباره چکش کن."
+                    ;;
+                *)
+                    warn "اتصال به api.telegram.org برقرار نشد — با همین توکن ادامه می‌دم."
+                    break
+                    ;;
+            esac
+        done
+        upsert_env BOT_TOKEN "$T"
+        ok "BOT_TOKEN داخل .env ست شد."
+    else
+        ok "BOT_TOKEN از قبل تو .env هست."
+    fi
+
+    # ----- ADMIN_IDS (پیشنهادی) -----
+    CUR_ADMINS=$(envget ADMIN_IDS "")
+    if [ -z "$CUR_ADMINS" ]; then
+        ask_read "ADMIN_IDS (آی‌دی عددی تلگرامت از @userinfobot — چندتا با کاما، Enter = رد شو): "
+        A="${ANSWER// /}"
+        if [ -n "$A" ]; then
+            if [[ "$A" =~ ^[0-9]+(,[0-9]+)*$ ]]; then
+                upsert_env ADMIN_IDS "$A"
+                ok "ADMIN_IDS ست شد: $A"
+            else
+                warn "فرمت ADMIN_IDS عجیب بود — ست نشد؛ بعداً دستی تو .env پرش کن."
+            fi
+        else
+            warn "ADMIN_IDS خالی موند — دستورهای ادمین تا وقتی تو .env پرش کنی کار نمی‌کنن."
+        fi
+    else
+        ok "ADMIN_IDS از قبل تو .env هست."
     fi
 else
-    ok "فایل .env موجوده."
+    # بدون ترمینال تعاملی (CI/pipe) — فقط چک می‌کنیم و با راهنما می‌شینیم
+    NEED=""
+    CUR_TOKEN=$(envget BOT_TOKEN "")
+    case "$CUR_TOKEN" in ""|"123456:ABC-your-token-here") NEED="BOT_TOKEN" ;; esac
+    [ -z "$(envget ADMIN_IDS "")" ] && NEED="${NEED:+$NEED و }ADMIN_IDS"
+    if [ -n "$NEED" ]; then
+        fail "مقدار $NEED تو .env ست نیست و ترمینال تعاملی هم در دسترس نیست!"
+        echo "   یا با env اجرا کن:  BOT_TOKEN=\"123:ABC\" ADMIN_IDS=\"123\" sudo -E bash setup_downloader_bot.sh"
+        echo "   یا (پیشنهادی) از deploy.sh استفاده کن که همه‌چیز رو خودش می‌پرسه: deploy/deploy.sh"
+        exit 1
+    fi
 fi
+
+chown "$SERVICE_USER:$SERVICE_USER" "$ENV_FILE"
+chmod 600 "$ENV_FILE"
+ok "فایل .env آماده و مقادیر اجباری پرن."
 
 # 7) venv (با کاربر سرویس ساخته/استفاده می‌شه تا مالکیت‌ها خراب نشه)
 if [ ! -f "$VENV_DIR/bin/python3" ]; then
     info "venv پیدا نشد، در حال ساخت..."
-    sudo -u "$SERVICE_USER" python3 -m venv "$VENV_DIR"
+    sudo -u "$SERVICE_USER" -H python3 -m venv "$VENV_DIR"
     ok "venv ساخته شد."
 else
     ok "venv از قبل موجوده."
@@ -134,17 +255,17 @@ fi
 # 8) نصب کامل requirements
 if [ -f "$INSTALL_DIR/requirements.txt" ]; then
     info "در حال نصب/به‌روزرسانی requirements.txt ..."
-    sudo -u "$SERVICE_USER" "$VENV_DIR/bin/pip" install -q --upgrade pip
-    sudo -u "$SERVICE_USER" "$VENV_DIR/bin/pip" install -q -r "$INSTALL_DIR/requirements.txt"
+    sudo -u "$SERVICE_USER" -H "$VENV_DIR/bin/pip" install -q --upgrade pip
+    sudo -u "$SERVICE_USER" -H "$VENV_DIR/bin/pip" install -q -r "$INSTALL_DIR/requirements.txt"
     ok "requirements.txt نصب شد."
 else
     warn "requirements.txt پیدا نشد، این مرحله رد شد."
 fi
 
 # 9) اطمینان از async_timeout (باگ شناخته‌شده‌ی redis<8.0)
-if ! sudo -u "$SERVICE_USER" "$VENV_DIR/bin/pip" show async_timeout &>/dev/null; then
+if ! sudo -u "$SERVICE_USER" -H "$VENV_DIR/bin/pip" show async_timeout &>/dev/null; then
     info "async_timeout نصب نیست، در حال نصب..."
-    sudo -u "$SERVICE_USER" "$VENV_DIR/bin/pip" install -q async_timeout
+    sudo -u "$SERVICE_USER" -H "$VENV_DIR/bin/pip" install -q async_timeout
     ok "async_timeout نصب شد."
 else
     ok "async_timeout از قبل نصبه."
@@ -153,7 +274,7 @@ fi
 # 10) اطمینان از وجود اجرایی yt-dlp داخل venv
 if [ ! -x "$VENV_DIR/bin/yt-dlp" ]; then
     info "yt-dlp executable پیدا نشد، در حال نصب مجدد..."
-    sudo -u "$SERVICE_USER" "$VENV_DIR/bin/pip" install -q --force-reinstall yt-dlp
+    sudo -u "$SERVICE_USER" -H "$VENV_DIR/bin/pip" install -q --force-reinstall yt-dlp
     ok "yt-dlp نصب شد."
 else
     ok "yt-dlp executable موجوده: $VENV_DIR/bin/yt-dlp"
@@ -161,7 +282,7 @@ fi
 
 # 11) اعمال migration های دیتابیس
 info "اعمال migration ها (alembic upgrade head) ..."
-if sudo -u "$SERVICE_USER" bash -c "cd '$INSTALL_DIR' && '$VENV_DIR/bin/alembic' upgrade head"; then
+if sudo -u "$SERVICE_USER" -H bash -c "cd '$INSTALL_DIR' && '$VENV_DIR/bin/alembic' upgrade head"; then
     ok "دیتابیس به‌روزه."
 else
     warn "alembic ناموفق بود - اگه بار اوله و دیتابیس از قبل با create_all ساخته شده، طبیعیه؛ ادامه بده."
@@ -191,6 +312,20 @@ done
 # 13) enable + (re)start سرویس اصلی
 # (وب‌سرور لینک مستقیم وقتی DIRECT_LINK_ENABLED فعاله توسط run.py خودش بالا
 #  میاد؛ واحد downloader-bot-directlink فقط برای اجرای جداگانه‌ست - دستی enableش کن)
+if ! has_systemd; then
+    warn "systemd در دسترس نیست (کانتینر/Deepnote؟) — از راه‌اندازی سرویس رد شدیم."
+    echo ""
+    echo "   برای اجرای دستی:"
+    echo "   cd $INSTALL_DIR && sudo -u $SERVICE_USER $VENV_DIR/bin/python run.py"
+    echo ""
+    echo "=============================================="
+    echo " نصب کامل شد (بدون سرویس systemd)"
+    echo "=============================================="
+    echo "📍 مسیر نصب: $INSTALL_DIR"
+    echo "🔒 فایل تنظیمات: $INSTALL_DIR/.env"
+    exit 0
+fi
+
 systemctl daemon-reload
 systemctl enable downloader-bot &>/dev/null
 

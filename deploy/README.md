@@ -18,46 +18,63 @@ deploy/
 
 برای سرور **تازه** که هنوز هیچی روش نیست. خودش:
 
-1. پروژه رو `git clone` می‌کنه (یا زیپ دانلود می‌کنه) — اگه از قبل باشه `git pull`
-2. پیش‌نیازهای سیستم رو نصب می‌کنه: `git`, `python3-venv`, `curl`, `unzip`,
+1. پیش‌نیازهای سیستم رو نصب می‌کنه: `git`, `python3-venv`, `curl`, `unzip`,
    `ffmpeg`, `redis-server` (+ فعال‌سازی Redis)
-3. **تعاملی** اطلاعات لازم رو می‌پرسه (Enter = پیش‌فرض):
-   - `BOT_TOKEN` (اجباری، از @BotFather)
-   - `ADMIN_IDS` (اجباری، از @userinfobot)
+2. پروژه رو `git clone` می‌کنه (اگه از قبل با گیت هست `git pull` — زیپ هم قبوله)
+3. **تعاملی** اطلاعات لازم رو می‌پرسه و **مستقیم داخل `.env` می‌نویسه**:
+   - `BOT_TOKEN` (اجباری) — **با اعتبارسنجی واقعی**: همون لحظه با `getMe`
+     چک می‌شه و یوزرنیم بات نشون داده می‌شه؛ توکن غلط همون‌جا رد می‌شه،
+     نه آخرِ کار که بات کرش کرد
+   - `ADMIN_IDS` (اجباری) — فقط عدد و کاما قبوله
    - `BOT_USERNAME` / `CHANNEL_USERNAME` / `ALLOWED_GROUP_IDS`
-   - دیتابیس: SQLite (پیش‌فرض) یا PostgreSQL (نصبش هم خودکار)
-   - لینک مستقیم: روشن/خاموش + پورت + دامنه
-4. **IP عمومی سرور رو خودکار تشخیص می‌ده** (api.ipify.org → ifconfig.me →
-   icanhazip.com → `hostname -I`) و اگه دامنه ندی،
-   `DIRECT_LINK_PUBLIC_URL` رو `http://<IP>:8090` می‌کنه
-5. `.env` کامل می‌سازه (با `chmod 600`)
-6. اگه `ufw` فعال باشه پورت لینک مستقیم رو باز می‌کنه
-7. `setup_downloader_bot.sh` رو صدا می‌زنه که بقیه‌ی کار رو تموم کنه
+   - دیتابیس: SQLite (پیش‌فرض) یا PostgreSQL — اگه Postgres رو انتخاب کنی،
+     خودش نصب می‌کنه، کاربر و دیتابیس می‌سازه و `DATABASE_URL` رو با رمز
+     تصادفی تولید می‌کنه (هیچ کار دستی لازم نیست)
+   - لینک مستقیم: روشن/خاموش + پورت + دامنه (با پرسش http/https — دیگه
+     بدون SSL اجباراً https نمی‌شه)
+4. **IP عمومی سرور رو خودکار تشخیص می‌ده** و اگه دامنه ندی،
+   `DIRECT_LINK_PUBLIC_URL` رو `http://<IP>:<PORT>` می‌کنه
+5. قبل از نصب، **خلاصه‌ی تنظیمات رو نشون می‌ده و تأیید می‌گیره**
+6. `.env` رو می‌سازه (با `chmod 600`) — **بدون خراب کردن تنظیمات قبلی**:
+   فقط کلیدهای خودش به‌روز می‌شن؛ کوکی‌ها، `FILELU_API_KEY` و هر ویرایش
+   دستی دیگه حفظ می‌شن
+7. اگه `ufw` فعال باشه پورت لینک مستقیم رو باز می‌کنه
+8. `setup_downloader_bot.sh` رو صدا می‌زنه که Docker، Local Bot API،
+   venv، migration و systemd رو نصب و سرویس رو استارت کنه
 
 ### اجرا
 
 ```bash
 # از داخل ریپوی کلون‌شده:
-sudo bash deploy/deploy.sh https://github.com/USER/REPO.git
+sudo bash deploy/deploy.sh
 
 # یا بدون کلون قبلی (مستقیم از گیت‌هاب):
 curl -fsSL https://raw.githubusercontent.com/USER/REPO/main/deploy/deploy.sh \
-  | sudo bash -s -- https://github.com/USER/REPO.git
+  -o deploy.sh && sudo bash deploy.sh https://github.com/USER/REPO.git
 
 # با زیپ:
 sudo bash deploy/deploy.sh https://github.com/USER/REPO/archive/refs/heads/main.zip
 
 # شاخه یا مسیر نصب دلخواه:
-BRANCH=dev INSTALL_DIR=/opt/downloader_bot sudo bash deploy/deploy.sh <repo-url>
-
-# غیرتعاملی (اتوماسیون / CI):
-REPO_URL="..." BOT_TOKEN="123:ABC" ADMIN_IDS="123,456" \
-  DIRECT_LINK_DOMAIN="dl.example.ir" NONINTERACTIVE=1 \
-  sudo bash deploy/deploy.sh
+BRANCH=dev INSTALL_DIR=/opt/downloader_bot sudo bash deploy/deploy.sh
 ```
 
-> **idempotent** هست — اجرای چندباره مشکلی نداره و برای آپدیت هم می‌شه
-> دوباره اجراش کرد.
+### غیرتعاملی (اتوماسیون / CI)
+
+⚠️ `sudo` به‌صورت پیش‌فرض متغیرهای محیطی رو رد نمی‌کنه — از `sudo -E env` استفاده کن:
+
+```bash
+sudo -E env REPO_URL="https://github.com/USER/REPO.git" \
+  BOT_TOKEN="123:ABC" ADMIN_IDS="123,456" \
+  NONINTERACTIVE=1 bash deploy/deploy.sh
+```
+
+در حالت غیرتعاملی: `BOT_TOKEN` و `ADMIN_IDS` اجبارین؛ توکن نامعتبر (پاسخ
+401 از تلگرام) کل دیپلوی رو همون اول متوقف می‌کنه.
+
+> **idempotent** هست — اجرای دوباره = آپدیت کد با `git pull` + حفظ `.env`
+> (فقط اگه مقدار جدیدی از env داده شده باشی همون کلید عوض می‌شه).
+> دامنه‌ی پیش‌فرض مخزن خود پروژه‌ست؛ Enter بزنی همون کلون می‌شه.
 
 ---
 
@@ -69,11 +86,15 @@ REPO_URL="..." BOT_TOKEN="123:ABC" ADMIN_IDS="123,456" \
 - کاربر سیستمیِ بدون لاگین `downloader` (نه root!)
 - پوشه‌های داده: `/var/lib/downloader_bot`, `/var/lib/telegram-bot-api`
 - Docker + کانتینر Local Bot API Server (پورت 8081، فقط localhost)
-- venv + نصب `requirements.txt`
-- ساخت `.env` از `.env.example` (بار اول می‌ایسته تا پرش کنی)
+- venv + نصب `requirements.txt` (با `sudo -u -H` که کش pip سالم بمونه)
 - `alembic upgrade head` (migration ها)
 - کپی و تنظیم unit های systemd از `deploy/systemd/`
 - `systemctl enable` + `restart`
+
+**فرقش با قبل:** اگه `.env` نباشه یا `BOT_TOKEN` خالی باشه، دیگه وسط کار
+نمی‌ایسته که «برو با nano پرش کن» — خودش می‌پرسه (با همون اعتبارسنجی
+توکن از تلگرام) و مستقیم داخل `.env` می‌نویسه. فقط وقتی ترمینال تعاملی
+نداشته باشی (CI/pipe) با راهنمای واضح می‌ایسته.
 
 ```bash
 sudo bash deploy/setup_downloader_bot.sh
@@ -134,7 +155,9 @@ venv/bin/alembic upgrade head             # فقط اگه فیلد جدید تو
 sudo systemctl restart downloader-bot
 ```
 
-یا صرفاً `sudo bash deploy/deploy.sh <repo-url>` رو دوباره بزن (pull می‌کنه).
+یا صرفاً `sudo bash deploy/deploy.sh` رو دوباره بزن (pull می‌کنه و `.env`
+قبلی رو حفظ می‌کنه — سوال‌ها با مقادیر فعلی `.env` پیش‌پر شدن؛ Enter بزنی
+همون می‌مونه).
 
 ---
 
