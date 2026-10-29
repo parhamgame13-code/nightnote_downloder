@@ -292,8 +292,15 @@ if [ ! -f "$VENV_DIR/bin/python3" ]; then
         warn "ساخت venv با کاربر $SERVICE_USER ممکن نشد (فایل‌سیستم اجازه‌ی نوشتن نمی‌ده؟) — با root ادامه می‌دم."
         rm -rf "$VENV_DIR"
         RUN_AS_ROOT=1
+        # venv پر از فایل‌های ریزه؛ روی دیسک شبکه‌ای مثل /datasets در Deepnote
+        # ساخت و نصب‌ش فوق‌العاده کنده — در حالت root ببرش روی دیسک محلی (/opt)
+        if [ "$INSTALL_DIR" != "/opt/downloader_bot" ]; then
+            VENV_DIR="/opt/downloader_bot_venv"
+            info "venv روی دیسک محلی ساخته می‌شه: $VENV_DIR (نه داخل INSTALL_DIR)"
+        fi
+        mkdir -p "$(dirname "$VENV_DIR")"
         python3 -m venv "$VENV_DIR" || { fail "ساخت venv ناموفق بود!"; exit 1; }
-        ok "venv ساخته شد (root)."
+        ok "venv ساخته شد (root، مسیر $VENV_DIR)."
     fi
 else
     ok "venv از قبل موجوده."
