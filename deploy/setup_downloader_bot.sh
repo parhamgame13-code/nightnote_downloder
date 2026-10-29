@@ -75,6 +75,14 @@ check_bot_token() {  # -> OK:<username> | INVALID | UNREACHABLE
     fi
 }
 
+# اجرای دستور با کاربر سرویس؛ اگه فایل‌سیستم اجازه‌ی کاربر جدا نداد (mount مثل
+# /datasets در Deepnote که chown رو قبول نمی‌کنه)، با root ادامه می‌دیم.
+RUN_AS_ROOT=0
+svc_run() {
+    if [ "$RUN_AS_ROOT" = "1" ]; then "$@"
+    else sudo -u "$SERVICE_USER" -H "$@"; fi
+}
+
 echo "=============================================="
 echo " شروع بررسی و راه‌اندازی کامل Downloader Bot"
 echo "=============================================="
@@ -103,11 +111,15 @@ else
     ok "کاربر $SERVICE_USER ساخته شد."
 fi
 
-# 3) پوشه‌های داده + مالکیت‌ها
+# 3) پوشه‌های داده + مالکیت‌ها (روی mountهای خاص مثل /datasets در Deepnote ممکنه chown شکست بخوره)
 mkdir -p /var/lib/downloader_bot /var/lib/telegram-bot-api "$INSTALL_DIR/logs"
-chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR" /var/lib/downloader_bot
-chown "$SERVICE_USER:$SERVICE_USER" /var/lib/telegram-bot-api
-ok "پوشه‌های داده و مالکیت‌ها درست شد."
+if chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR" /var/lib/downloader_bot 2>/dev/null; then
+    chown "$SERVICE_USER:$SERVICE_USER" /var/lib/telegram-bot-api 2>/dev/null || true
+    ok "پوشه‌های داده و مالکیت‌ها درست شد."
+else
+    warn "chown روی $INSTALL_DIR انجام نشد (فایل‌سیستم اجازه‌ی تغییر مالکیت نمی‌ده)."
+    warn "اگه ساخت venv با کاربر $SERVICE_USER هم شکست بخوره، اسکریپت خودش با root ادامه می‌ده (حالت کانتینری)."
+fi
 
 # 4) بررسی/نصب Docker — و اطمینان از اینکه دیمون واقعاً بالاست (نه فقط نصب)
 DOCKER_OK=0
@@ -258,8 +270,8 @@ else
     fi
 fi
 
-chown "$SERVICE_USER:$SERVICE_USER" "$ENV_FILE"
-chmod 600 "$ENV_FILE"
+chown "$SERVICE_USER:$SERVICE_USER" "$ENV_FILE" 2>/dev/null || true
+chmod 600 "$ENV_FILE" 2>/dev/null || true
 ok "فایل .env آماده و مقادیر اجباری پرن."
 
 # 6.5) اگه Docker/کانتینر Local Bot API در دسترس نیست، حتماً خاموشش کن؛
@@ -274,8 +286,15 @@ fi
 # 7) venv (با کاربر سرویس ساخته/استفاده می‌شه تا مالکیت‌ها خراب نشه)
 if [ ! -f "$VENV_DIR/bin/python3" ]; then
     info "venv پیدا نشد، در حال ساخت..."
-    sudo -u "$SERVICE_USER" -H python3 -m venv "$VENV_DIR"
-    ok "venv ساخته شد."
+    if sudo -u "$SERVICE_USER" -H python3 -m venv "$VENV_DIR" 2>/dev/null; then
+        ok "venv ساخته شد (کاربر $SERVICE_USER)."
+    else
+        warn "ساخت venv با کاربر $SERVICE_USER ممکن نشد (فایل‌سیستم اجازه‌ی نوشتن نمی‌ده؟) — با root ادامه می‌دم."
+        rm -rf "$VENV_DIR"
+        RUN_AS_ROOT=1
+        python3 -m venv "$VENV_DIR" || { fail "ساخت venv ناموفق بود!"; exit 1; }
+        ok "venv ساخته شد (root)."
+    fi
 else
     ok "venv از قبل موجوده."
 fi
@@ -283,18 +302,20 @@ fi
 # 8) نصب کامل requirements
 if [ -f "$INSTALL_DIR/requirements.txt" ]; then
     info "در حال نصب/به‌روزرسانی requirements.txt ..."
-    sudo -u "$SERVICE_USER" -H "$VENV_DIR/bin/pip" install -q --upgrade pip
-    sudo -u "$SERVICE_USER" -H "$VENV_DIR/bin/pip" install -q -r "$INSTALL_DIR/requirements.txt"
-    ok "requirements.txt نصب شد."
+    if svc_run "$VENV_DIR/bin/pip" install -q --upgrade pip && svc_run "$VENV_DIR/bin/pip" install -q -r "$INSTALL_DIR/requirements.txt"; then
+        ok "requirements.txt نصب شد."
+    else
+        fail "نصب requirements.txt ناموفق بود — لاگ بالا رو چک کن."
+        exit 1
+    fi
 else
     warn "requirements.txt پیدا نشد، این مرحله رد شد."
 fi
 
 # 9) اطمینان از async_timeout (باگ شناخته‌شده‌ی redis<8.0)
-if ! sudo -u "$SERVICE_USER" -H "$VENV_DIR/bin/pip" show async_timeout &>/dev/null; then
+if ! svc_run "$VENV_DIR/bin/pip" show async_timeout &>/dev/null; then
     info "async_timeout نصب نیست، در حال نصب..."
-    sudo -u "$SERVICE_USER" -H "$VENV_DIR/bin/pip" install -q async_timeout
-    ok "async_timeout نصب شد."
+    svc_run "$VENV_DIR/bin/pip" install -q async_timeout && ok "async_timeout نصب شد." || warn "نصب async_timeout ناموفق بود."
 else
     ok "async_timeout از قبل نصبه."
 fi
@@ -302,7 +323,7 @@ fi
 # 10) اطمینان از وجود اجرایی yt-dlp داخل venv
 if [ ! -x "$VENV_DIR/bin/yt-dlp" ]; then
     info "yt-dlp executable پیدا نشد، در حال نصب مجدد..."
-    sudo -u "$SERVICE_USER" -H "$VENV_DIR/bin/pip" install -q --force-reinstall yt-dlp
+    svc_run "$VENV_DIR/bin/pip" install -q --force-reinstall yt-dlp
     ok "yt-dlp نصب شد."
 else
     ok "yt-dlp executable موجوده: $VENV_DIR/bin/yt-dlp"
@@ -310,7 +331,7 @@ fi
 
 # 11) اعمال migration های دیتابیس
 info "اعمال migration ها (alembic upgrade head) ..."
-if sudo -u "$SERVICE_USER" -H bash -c "cd '$INSTALL_DIR' && '$VENV_DIR/bin/alembic' upgrade head"; then
+if svc_run bash -c "cd '$INSTALL_DIR' && '$VENV_DIR/bin/alembic' upgrade head"; then
     ok "دیتابیس به‌روزه."
 else
     warn "alembic ناموفق بود - اگه بار اوله و دیتابیس از قبل با create_all ساخته شده، طبیعیه؛ ادامه بده."
@@ -344,7 +365,13 @@ if ! has_systemd; then
     warn "systemd در دسترس نیست (کانتینر/Deepnote؟) — از راه‌اندازی سرویس رد شدیم."
     echo ""
     echo "   برای اجرای دستی:"
-    echo "   cd $INSTALL_DIR && sudo -u $SERVICE_USER $VENV_DIR/bin/python run.py"
+    if [ "$RUN_AS_ROOT" = "1" ]; then
+        echo "   cd $INSTALL_DIR && C_FORCE_ROOT=1 nohup $VENV_DIR/bin/python run.py > logs/run.out 2>&1 &"
+        echo "   (چون فایل‌سیستم اجازه‌ی کاربر جدا نمی‌ده، venv با root ساخته شده — Celery هم C_FORCE_ROOT می‌خواد.)"
+        warn "حالت root/C_FORCE_ROOT فقط برای محیط کانتینری مثل Deepnote مناسبه؛ روی سرور واقعی سرویس systemd با کاربر جدا بالا میاد."
+    else
+        echo "   cd $INSTALL_DIR && sudo -u $SERVICE_USER $VENV_DIR/bin/python run.py"
+    fi
     echo ""
     echo "=============================================="
     echo " نصب کامل شد (بدون سرویس systemd)"
