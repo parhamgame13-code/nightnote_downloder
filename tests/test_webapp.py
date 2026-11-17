@@ -7,7 +7,6 @@ bot.db واقعی دست نمی‌خوره). متادیتا و yt-dlp موک م�
 """
 import asyncio
 import os
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 

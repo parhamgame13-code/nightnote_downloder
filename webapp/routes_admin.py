@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config import settings
 from db.crud import BotConfigCRUD, DownloadJobCRUD, DownloadStatsCRUD, UserCRUD
-from db.models import DownloadJob, User
+from db.models import User
 from utils.texts import EDITABLE_TEXTS
 from webapp.deps import (
     ADMIN_COOKIE_NAME,

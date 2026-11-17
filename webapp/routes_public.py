@@ -23,9 +23,8 @@ from bot.config import settings
 from db.crud import BotConfigCRUD, DownloadJobCRUD, UserCRUD
 from db.models import DownloadJob, DownloadStatus, FileType
 from utils.cache_key import get_cache_hash
-from utils.error_classifier import classify_download_error
 from utils.filename import safe_upload_filename
-from utils.link_detector import ContentType, LinkDetector, SiteType
+from utils.link_detector import LinkDetector, SiteType
 from utils.metadata import MetadataExtractor
 from utils.texts import get_text
 from utils.url_safety import url_is_safe_to_fetch
