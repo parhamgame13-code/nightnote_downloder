@@ -129,6 +129,36 @@ services:
       postgres:
         condition: service_healthy
 
+  # نسخه‌ی وب (FastAPI) — فقط وب؛ بات/ورکر/beat سرویس‌های جدا هستن.
+  # run_all.py با فلگ‌های RUN_BOT=0/RUN_WORKER=0/RUN_BEAT=0 فقط وب رو بالا
+  # میاره (روی PORT=8000). پشت reverse-proxy با TLS بذاریدش (docs/WEB_DEPLOYMENT.md).
+  web:
+    build: .
+    container_name: downloader_web
+    restart: always
+    command: python run_all.py
+    env_file: .env
+    environment:
+      RUN_BOT: "0"
+      RUN_WORKER: "0"
+      RUN_BEAT: "0"
+      RUN_REDIS: "0"
+      PORT: "8000"
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://downloader:secure_password_123@postgres/downloader_bot
+      LOCAL_BOT_API_URL: http://telegram-bot-api:8081
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    volumes:
+      - temp_data:/tmp/downloader_bot
+      - direct_links_data:/var/lib/downloader_bot/direct_links
+      - logs_data:/app/logs
+
 volumes:
   redis_data:
   postgres_data:

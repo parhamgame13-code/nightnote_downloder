@@ -1,0 +1,1 @@
+{"description":"NightNote web UI + API proxy for Cloudzyro (the Python backend runs elsewhere)","engines":{"node":">=20"},"name":"nightnote-web-ui","private":true,"scripts":{"start":"node server.js"},"version":"1.0.0"}

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NightNote — دانلودر وب</title>
+<link rel="stylesheet" href="styles.css">
+<script src="config.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🌙 <b>NightNote</b> <span>دانلودر وب</span></div>
+  <nav class="nav">
+    <a href="#downloader">دانلود</a>
+    <a href="#upload">آپلود فایل</a>
+    <a href="#history">تاریخچه</a>
+    <a href="#settings">تنظیمات</a>
+    <a href="#admin">پنل ادمین</a>
+  </nav>
+</header>
+
+<main class="container">
+  <div id="global-error" class="alert error hidden"></div>
+
+  <!-- دانلود -->
+  <section id="downloader" class="card">
+    <h1>🔗 دانلود از لینک</h1>
+    <p class="muted">لینک یوتیوب، اسپاتیفای، اینستاگرام، تیک‌تاک، توییتر، پینترست، آپارات و ۱۸۰۰+ سایت دیگه رو بفرست.</p>
+    <div class="row">
+      <input id="url-input" type="url" dir="ltr" placeholder="https://...">
+      <button id="inspect-btn" class="btn primary">بررسی لینک</button>
+    </div>
+    <div id="inspect-card" class="inspect hidden">
+      <img id="inspect-thumb" class="thumb" alt="">
+      <div class="inspect-body">
+        <div id="inspect-site" class="muted"></div>
+        <div id="inspect-title" class="title"></div>
+        <div id="inspect-meta" class="muted"></div>
+        <div id="inspect-desc" class="desc"></div>
+      </div>
+    </div>
+    <div id="quality-row" class="qualities hidden"></div>
+    <div id="rename-row" class="row hidden">
+      <label for="rename-input">اسم دلخواه فایل (انگلیسی):</label>
+      <input id="rename-input" type="text" dir="ltr" maxlength="100" placeholder="nightnote">
+    </div>
+    <div id="size-warning" class="alert warn hidden"></div>
+    <div class="row">
+      <button id="download-btn" class="btn primary hidden">⬇️ دانلود</button>
+      <button id="cancel-btn" class="btn danger hidden">❌ لغو</button>
+      <button id="retry-btn" class="btn hidden">🔁 تلاش دوباره</button>
+    </div>
+    <div id="progress-wrap" class="progress-wrap hidden">
+      <div class="progress-meta"><span id="progress-stage"></span><span id="progress-note" class="muted"></span></div>
+      <div class="progress"><div id="progress-bar" class="progress-bar"></div></div>
+      <div id="queue-info" class="muted"></div>
+    </div>
+    <div id="result-wrap" class="result hidden">
+      <div id="preview-wrap"></div>
+      <a id="download-link" class="btn primary" href="#" download>⬇️ دانلود فایل</a>
+      <span id="result-meta" class="muted"></span>
+    </div>
+    <div id="playlist-wrap" class="playlist hidden">
+      <h3>🎧 ترک‌های پلی‌لیست</h3>
+      <ul id="playlist-list"></ul>
+    </div>
+  </section>
+
+  <!-- آپلود -->
+  <section id="upload" class="card">
+    <h2>📤 آپلود مستقیم فایل</h2>
+    <p class="muted">فایل خودت رو بفرست و لینک دانلود مستقیم بگیر (مثل فرستادن فایل به بات).</p>
+    <div class="row">
+      <input id="upload-input" type="file">
+      <button id="upload-btn" class="btn primary">آپلود و گرفتن لینک</button>
+    </div>
+    <div id="upload-result" class="hidden">
+      <a id="upload-link" class="btn primary" href="#" download>⬇️ دانلود فایل آپلودشده</a>
+      <span id="upload-meta" class="muted"></span>
+    </div>
+  </section>
+
+  <!-- تاریخچه -->
+  <section id="history" class="card">
+    <h2>📋 تاریخچه‌ی دانلودهای من</h2>
+    <button id="history-refresh" class="btn">🔄 به‌روزرسانی</button>
+    <ul id="history-list" class="history"></ul>
+  </section>
+
+  <!-- تنظیمات -->
+  <section id="settings" class="card">
+    <h2>⚙️ تنظیمات من</h2>
+    <p class="muted">همون تنظیمات منوی <code>/settings</code> بات، روی وب.</p>
+    <label class="check"><input id="set-spoiler" type="checkbox"> تار کردن (بلور) تامبنیل‌ها</label>
+    <label class="check"><input id="set-document" type="checkbox"> همیشه دانلود به‌صورت فایل (بدون پیش‌نمایش پلیر)</label>
+    <label class="check"><input id="set-rename" type="checkbox"> نمایش فیلد «تغییر نام فایل» قبل از دانلود</label>
+    <label class="check"><input id="set-screenshots" type="checkbox"> نمایش تامبنیل/پیش‌نمایش‌ها</label>
+    <div class="row">
+      <label for="set-timezone">منطقه‌ی زمانی (برای نمایش زمان‌ها):</label>
+      <input id="set-timezone" type="text" dir="ltr" placeholder="Asia/Tehran">
+    </div>
+    <div class="row">
+      <label for="set-api-base">آدرس API (فقط وقتی رابط جدا از بک‌اند سرو می‌شه):</label>
+      <input id="set-api-base" type="text" dir="ltr" placeholder="https://api.example.com">
+    </div>
+    <button id="settings-save" class="btn primary">ذخیره‌ی تنظیمات</button>
+    <span id="settings-msg" class="muted"></span>
+  </section>
+
+  <!-- ادمین -->
+  <section id="admin" class="card">
+    <h2>👑 پنل ادمین</h2>
+    <div id="admin-login">
+      <p class="muted">برای مدیریت، رمز ادمین وب (ADMIN_PASSWORD) رو وارد کن.</p>
+      <div class="row">
+        <input id="admin-password" type="password" placeholder="رمز ادمین">
+        <button id="admin-login-btn" class="btn primary">ورود</button>
+      </div>
+      <div id="admin-login-error" class="alert error hidden"></div>
+    </div>
+    <div id="admin-panel" class="hidden">
+      <div class="row">
+        <button id="admin-logout-btn" class="btn danger">خروج</button>
+        <button id="admin-refresh-btn" class="btn">🔄 به‌روزرسانی آمار</button>
+      </div>
+      <div id="admin-stats" class="stats"></div>
+      <div class="row">
+        <label class="check"><input id="admin-toggle" type="checkbox"> سرویس دانلود روشن باشد (بات + وب)</label>
+        <button id="admin-toggle-save" class="btn">ذخیره‌ی وضعیت</button>
+      </div>
+      <h3>🌐 پرکاربردترین سایت‌ها</h3>
+      <ul id="admin-topsites" class="plain"></ul>
+      <h3>👤 جست‌وجوی کاربر</h3>
+      <div class="row">
+        <input id="admin-user-q" type="text" placeholder="آی‌دی عددی یا نام کاربر">
+        <button id="admin-user-search" class="btn">جست‌وجو</button>
+      </div>
+      <ul id="admin-users" class="plain"></ul>
+      <h3>📢 پیام همگانی (فقط تلگرام)</h3>
+      <textarea id="admin-broadcast-text" rows="3" placeholder="متن پیام (می‌تونه HTML تلگرام باشه)"></textarea>
+      <div class="row">
+        <select id="admin-broadcast-target">
+          <option value="all">همه‌ی کاربرهای تلگرام</option>
+          <option value="active7">فقط فعال‌های ۷ روز اخیر</option>
+        </select>
+        <button id="admin-broadcast-btn" class="btn primary">ارسال همگانی</button>
+      </div>
+      <div id="admin-broadcast-status" class="muted"></div>
+      <h3>✏️ متن‌های بات</h3>
+      <div id="admin-texts"></div>
+      <h3>📦 سقف حجم فایل</h3>
+      <div class="row">
+        <input id="admin-maxsize" type="number" min="1" max="2000" step="1">
+        <span class="muted">مگابایت</span>
+        <button id="admin-maxsize-save" class="btn">ذخیره</button>
+      </div>
+    </div>
+  </section>
+
+  <footer class="muted center">
+    NightNote Downloader — نسخه‌ی وب با همون قابلیت‌های بات تلگرام.<br>
+    <span id="api-base-note"></span>
+  </footer>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
