@@ -143,12 +143,46 @@ def test_index_served(client):
 def test_inspect_validation_errors(client):
     # بدنه‌ی خالی -> 422 اعتبارسنجی FastAPI
     assert client.post("/api/inspect", json={}).status_code == 422
-    # رشته‌ای که URL نیست -> 400
+    # رشته‌ای که URL نیست -> 400 (هاست ناموجود resolve نمی‌شه و SSRF ردش می‌کنه)
     resp = client.post("/api/inspect", json={"url": "not-a-url"})
     assert resp.status_code == 400
-    # URL بدون اسکیم -> 400
-    resp = client.post("/api/inspect", json={"url": "example.com/video"})
-    assert resp.status_code == 400
+    # نکته: لینک بدون اسکیم (مثل example.com/video) عمداً 400 نمی‌گیره؛
+    # _normalize_url بهش https:// اضافه می‌کنه. رفتارش تو تست جدا با موک
+    # چک می‌شه (test_inspect_schemeless_url_is_normalized_to_https).
+
+
+def test_inspect_schemeless_url_is_normalized_to_https(client):
+    """لینک بدون اسکیم باید https:// بگیره و پردازش بشه، نه 400.
+
+    این رفتار عمدی _normalize_url هست (مثل اعتبارسنجی بات که دامین بدون
+    اسکیم رو هم لینک معتبر می‌دونه). با موک SSRF و متادیتا تست می‌شه تا
+    نتیجه مستقل از DNS محیط باشه — قبلاً این کیس بدون موک بود و جوابش به
+    DNS وابسته بود (تو سندباکس 400، با DNS واقعی تو CI برابر 200).
+    """
+    fake_meta = SimpleNamespace(
+        title="Test Video",
+        artist="Test Artist",
+        album="Test Album",
+        duration=123,
+        thumbnail_url="https://example.com/thumb.jpg",
+        description="desc",
+    )
+    with patch(
+        "webapp.routes_public.MetadataExtractor.extract_from_url",
+        new=AsyncMock(return_value=fake_meta),
+    ), patch(
+        "webapp.routes_public.url_is_safe_to_fetch",
+        new=AsyncMock(return_value=True),
+    ):
+        resp = client.post(
+            "/api/inspect",
+            json={"url": "www.youtube.com/watch?v=dQw4w9WgXcQ"},
+        )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["url"] == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    assert data["site"] == "youtube"
+    assert data["title"] == "Test Video"
 
 
 def test_inspect_ssrf_private_ips_rejected(client):
