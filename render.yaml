@@ -1,0 +1,51 @@
+# Render Blueprint — دپلوی تک‌سرویسیِ NightNote (وب + بات + ورکر + beat).
+#
+# استفاده: تو داشبورد Render گزینه‌ی «New + → Blueprint» رو بزن و همین ریپو
+# رو انتخاب کن؛ Render خودش این فایل رو می‌خونه و سرویس رو می‌سازه.
+# بعد از ساخت، مقدارهای sync:false رو تو صفحه‌ی Environment خودِ سرویس پر کن.
+#
+# نکات مهم (جزئیات کامل: docs/WEB_DEPLOYMENT.md):
+# - runtime: docker — چون به ffmpeg و redis-server توکار نیاز داریم.
+# - پلن free بعد از ~۱۵ دقیقه بیکاری می‌خوابه و بات هم باهاش می‌خوابه؛
+#   برای بات همیشه‌روشن باید plan رو به یه پلن پولی تغییر بدی.
+# - دیسک این سرویس موقتیه: دیتابیس SQLite و فایل‌های دانلودشده با هر
+#   ری‌استارت/ریدپلوی پاک می‌شن. برای نگه‌داشتن داده، یا دیسک دائمی
+#   (فقط پلن پولی — بلاک کامنت‌شده‌ی پایین) یا Postgres خارجی ست کن.
+services:
+  - type: web
+    name: nightnote-downloader
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /healthz
+    # دیسک دائمی (فقط با پلن پولی کار می‌کنه — اگه plan رو عوض کردی،
+    # این بلاک رو uncomment کن و DATABASE_URL رو به
+    # sqlite+aiosqlite:////data/bot.db تغییر بده):
+    # disk:
+    #   name: nightnote-data
+    #   mountPath: /data
+    #   sizeGB: 10
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_IDS
+        sync: false
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      - key: WEB_SECRET_KEY
+        generateValue: true
+      # SQLite پیش‌فرض (موقتی روی Render free — راهنما رو ببین)
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./bot.db
+      # ردیس توکارِ داخل کانتینر (run_all.py خودش redis-server رو بالا میاره)
+      - key: REDIS_URL
+        value: redis://localhost:6379/0
+      # آدرس عمومی سایت — بعد از اولین دپلوی، آدرس Render رو این‌جا بذار
+      # (مثلاً https://nightnote-downloader.onrender.com) تا لینک‌های
+      # دانلود با آدرس درست ساخته بشن.
+      - key: WEB_PUBLIC_URL
+        sync: false
+      - key: DIRECT_LINK_DIR
+        value: /tmp/downloader_bot/direct_links
+      - key: TEMP_DIR
+        value: /tmp/downloader_bot

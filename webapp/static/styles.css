@@ -1,0 +1,89 @@
+/* رابط وب NightNote — بدون هیچ وابستگی خارجی، فقط فونت‌های سیستمی. */
+:root {
+  --bg: #0d1117;
+  --card: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #7c5cff;
+  --accent-2: #238636;
+  --danger: #da3633;
+  --warn: #9e6a03;
+  --radius: 12px;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Tahoma, "Segoe UI", Vazirmatn, system-ui, sans-serif;
+  line-height: 1.7;
+}
+.topbar {
+  display: flex; flex-wrap: wrap; gap: .5rem 1rem;
+  align-items: center; justify-content: space-between;
+  padding: .8rem 1rem; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--bg); z-index: 10;
+}
+.brand { font-size: 1.15rem; }
+.brand span { color: var(--muted); font-size: .9rem; }
+.nav { display: flex; gap: 1rem; flex-wrap: wrap; }
+.nav a { color: var(--text); text-decoration: none; }
+.nav a:hover { color: var(--accent); }
+.container { max-width: 860px; margin: 0 auto; padding: 1rem; }
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 1.2rem; margin-bottom: 1rem;
+}
+h1, h2, h3 { margin: .2rem 0 .6rem; }
+.muted { color: var(--muted); }
+.center { text-align: center; }
+.hidden { display: none !important; }
+.row { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; margin: .6rem 0; }
+input[type="text"], input[type="url"], input[type="password"], input[type="number"], textarea, select {
+  background: #0d1117; color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: .6rem .8rem; font: inherit; flex: 1; min-width: 200px;
+}
+input[type="file"] { font: inherit; }
+textarea { width: 100%; }
+.btn {
+  border: 1px solid var(--border); background: #21262d; color: var(--text);
+  border-radius: 8px; padding: .6rem 1rem; cursor: pointer; font: inherit;
+  text-decoration: none; display: inline-block;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn:disabled { opacity: .55; cursor: wait; }
+.alert { border-radius: 8px; padding: .7rem 1rem; margin: .6rem 0; }
+.alert.error { background: #3d1212; border: 1px solid var(--danger); }
+.alert.warn { background: #3a2c07; border: 1px solid var(--warn); }
+.inspect { display: flex; gap: 1rem; margin: 1rem 0; }
+.thumb { width: 160px; height: 90px; object-fit: cover; border-radius: 8px; background: #000; }
+.thumb.blurred { filter: blur(14px); }
+.inspect-body .title { font-weight: bold; font-size: 1.05rem; }
+.desc { white-space: pre-wrap; word-break: break-word; max-height: 7rem; overflow: auto; font-size: .9rem; }
+.qualities { display: flex; gap: .5rem; flex-wrap: wrap; margin: .6rem 0; }
+.quality-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.progress-wrap { margin: 1rem 0; }
+.progress-meta { display: flex; justify-content: space-between; gap: 1rem; }
+.progress { background: #0d1117; border: 1px solid var(--border); border-radius: 999px; height: 14px; overflow: hidden; }
+.progress-bar { background: var(--accent); height: 100%; width: 0; transition: width .4s; }
+.progress-bar.indeterminate { width: 40% !important; animation: slide 1.2s ease-in-out infinite alternate; }
+@keyframes slide { from { margin-right: 0; } to { margin-right: 60%; } }
+.result { margin-top: 1rem; display: flex; gap: .8rem; flex-wrap: wrap; align-items: center; }
+.result video, .result audio { max-width: 100%; }
+.playlist ul, .history, .plain { list-style: none; padding: 0; margin: .5rem 0; }
+.history li, .playlist li, .plain li {
+  border: 1px solid var(--border); border-radius: 8px; padding: .6rem .8rem; margin-bottom: .5rem;
+}
+.check { display: flex; gap: .5rem; align-items: center; margin: .4rem 0; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .6rem; margin: .8rem 0; }
+.stats div { border: 1px solid var(--border); border-radius: 8px; padding: .6rem; }
+.stats b { display: block; font-size: 1.3rem; }
+code { direction: ltr; unicode-bidi: embed; }
+@media (max-width: 600px) {
+  .inspect { flex-direction: column; }
+  .thumb { width: 100%; height: auto; aspect-ratio: 16/9; }
+  .row input { min-width: 0; }
+}

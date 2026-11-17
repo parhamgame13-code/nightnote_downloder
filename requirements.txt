@@ -36,5 +36,10 @@ mutagen==1.48.1
 # QR کد لینک دانلود مستقیم
 qrcode[pil]==7.4.2
 
+# وب (نسخه‌ی وب nightnote_downloder - webapp/)
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9  # برای UploadFile در /api/upload
+
 # دیگر
 cryptography==49.0.0
